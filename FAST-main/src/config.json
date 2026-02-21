@@ -1,0 +1,59 @@
+{
+  "activeThemeId": 0,
+  "themes": {
+    "light": {
+      "themeId": 0,
+      "style": {
+        "backgroundColor": "#fff",
+        "foregroundColor": "#000",
+        "hoverColor": "#f8f8f8",
+        "fontColor": "#303030",
+        "textEntryColor": "#fff",
+        "textBorderColor": "#808080",
+        "textHighlightColor": "#1a73ea",
+        "starColor": "red"
+      }
+    },
+    "dark": {
+      "themeId": 1,
+      "style": {
+        "backgroundColor": "#282a36",
+        "foregroundColor": "#fff",
+        "hoverColor": "#44475a",
+        "fontColor": "#fff",
+        "textEntryColor": "#fff",
+        "textBorderColor": "#fff",
+        "textHighlightColor": "#fff",
+        "starColor": "red"
+      }
+    }
+  },
+  "release": "prod",
+  "prod": {
+    "hazpyInitUrl": "https://raw.githubusercontent.com/nhrap-hazus/hazpy/main/hazpy/__init__.py",
+    "repoZipfileUrl": "https://github.com/nhrap-hazus/FAST/archive/main.zip",
+    "toolInitUrl": "https://raw.githubusercontent.com/nhrap-hazus/FAST/main/src/__init__.py",
+    "virtualEnvironment": "hazus_env",
+    "pythonPackage": "hazpy",
+    "httpTimeout": 5
+  },
+  "test": {
+    "hazpyInitUrl": "https://raw.githubusercontent.com/nhrap-hazus/hazpy/test/hazpy/__init__.py",
+    "repoZipfileUrl": "https://github.com/nhrap-hazus/FAST/archive/test.zip",
+    "toolInitUrl": "https://raw.githubusercontent.com/nhrap-hazus/FAST/test/src/__init__.py",
+    "virtualEnvironment": "hazus_env",
+    "pythonPackage": "hazpy",
+    "httpTimeout": 5
+  },
+  "dev": {
+    "hazpyInitUrl": "https://raw.githubusercontent.com/nhrap-dev/hazpy/dev/hazpy/__init__.py",
+    "repoZipfileUrl": "https://github.com/nhrap-dev/FAST/archive/dev.zip",
+    "toolInitUrl": "https://raw.githubusercontent.com/nhrap-dev/FAST/dev/src/__init__.py",
+    "virtualEnvironment": "hazus_env",
+    "pythonPackage": "hazpy",
+    "httpTimeout": 5
+  },
+  "proxies": {
+    "fema": "http://proxy.apps.dhs.gov:80"
+  }
+}
