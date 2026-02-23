@@ -72,18 +72,186 @@
 import logging
 import os,csv,sys,time,math,datetime,subprocess,numpy as np, utm
 from osgeo import gdal, osr, gdal_array
+
+try:
+    import pyarrow.parquet as pq
+except Exception:
+    pq = None
+
 gdal.SetCacheMax(2**30*5)
 
 
 logger = logging.getLogger('FAST')
 logger.setLevel(logging.INFO)
-#logging.basicConfig('app.log',filemode='w',format='%(name)s - %(levelname)s - %(message)s')
-handler = logging.FileHandler('../Log/app.log')
-handler.setLevel(logging.INFO)
+logger.propagate = False
 
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+DEFAULT_FIELD_MAP_KEYS = [
+    'UserDefinedFltyId',
+    'OCC',
+    'Cost',
+    'Area',
+    'NumStories',
+    'FoundationType',
+    'FirstFloorHt',
+    'ContentCost',
+    'BDDF_ID',
+    'CDDF_ID',
+    'IDDF_ID',
+    'InvCost',
+    'SOID',
+    'Latitude',
+    'Longitude',
+]
+
+FLOOD_TYPE_ALIASES = {
+    '': '',
+    'riverine': 'HazardRiverine',
+    'hazardriverine': 'HazardRiverine',
+    'coastala': 'CAE',
+    'cae': 'CAE',
+    'coastalv': 'V',
+    'v': 'V',
+    've': 'V',
+}
+
+
+def _resolve_project_root(project_root=None):
+    if project_root:
+        return os.path.abspath(project_root)
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+
+
+def _resolve_lookup_tables_dir(project_root):
+    candidates = [
+        os.path.join(project_root, 'Lookuptables'),
+        os.path.join(project_root, 'lookuptables'),
+    ]
+    for candidate in candidates:
+        if os.path.isdir(candidate):
+            return candidate
+
+    for entry in os.listdir(project_root):
+        candidate = os.path.join(project_root, entry)
+        if entry.lower() == 'lookuptables' and os.path.isdir(candidate):
+            return candidate
+
+    raise FileNotFoundError('Unable to locate lookup tables directory under: ' + project_root)
+
+
+def _resolve_raster_paths(raster_names_or_paths, project_root):
+    if raster_names_or_paths is None:
+        raise ValueError('At least one raster must be provided.')
+    if isinstance(raster_names_or_paths, str):
+        raster_names_or_paths = [raster_names_or_paths]
+
+    raster_dir = os.path.join(project_root, 'rasters')
+    resolved = []
+    for raster in raster_names_or_paths:
+        raster_name = '' if raster is None else str(raster).strip()
+        if raster_name == '':
+            continue
+        if os.path.isabs(raster_name):
+            raster_path = raster_name
+        else:
+            raster_path = raster_name if os.path.exists(raster_name) else os.path.join(raster_dir, raster_name)
+        resolved.append(os.path.abspath(raster_path))
+
+    if len(resolved) == 0:
+        raise ValueError('At least one raster must be provided.')
+    return resolved
+
+
+def _normalize_flood_type(flood_type):
+    if flood_type is None:
+        return ''
+    normalized = str(flood_type).strip()
+    return FLOOD_TYPE_ALIASES.get(normalized.lower(), normalized)
+
+
+def _configure_logger(log_path=None, project_root=None):
+    root_dir = _resolve_project_root(project_root)
+    if not log_path:
+        log_path = os.path.join(root_dir, 'Log', 'app.log')
+
+    log_path = os.path.abspath(log_path)
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+
+    existing_file_handler = None
+    for handler in logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            existing_file_handler = handler
+            break
+
+    if existing_file_handler and os.path.abspath(existing_file_handler.baseFilename) == log_path:
+        return log_path
+
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+        try:
+            handler.close()
+        except Exception:
+            pass
+
+    handler = logging.FileHandler(log_path)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return log_path
+
+def _is_parquet_input(path):
+    return path.lower().endswith(('.parquet', '.pq'))
+
+def _normalize_input_value(value):
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.lower() in ('nan', 'none', 'null'):
+            return ''
+        return stripped
+    if isinstance(value, float) and math.isnan(value):
+        return ''
+    if isinstance(value, np.floating) and np.isnan(value):
+        return ''
+    if isinstance(value, bytes):
+        return value.decode('utf-8', errors='ignore').strip()
+    if isinstance(value, np.integer):
+        return str(int(value))
+    if isinstance(value, np.floating):
+        return str(float(value))
+    return str(value).strip()
+
+def _get_input_field_names(input_path):
+    if _is_parquet_input(input_path):
+        if pq is None:
+            raise RuntimeError('pyarrow is required for parquet input support.')
+        parquet_file = pq.ParquetFile(input_path)
+        return parquet_file.schema.names
+    with open(input_path, "r+") as f:
+        reader = csv.reader(f)
+        return next(reader)
+
+def _iter_input_rows(input_path):
+    if _is_parquet_input(input_path):
+        if pq is None:
+            raise RuntimeError('pyarrow is required for parquet input support.')
+        parquet_file = pq.ParquetFile(input_path)
+        for batch in parquet_file.iter_batches(batch_size=4096):
+            data = batch.to_pydict()
+            cols = list(data.keys())
+            for row_index in range(batch.num_rows):
+                row = {}
+                for col in cols:
+                    row[col] = _normalize_input_value(data[col][row_index])
+                yield row
+    else:
+        with open(input_path, newline='') as csvfile:
+            for row in csv.DictReader(csvfile):
+                normalized_row = {}
+                for key, value in row.items():
+                    normalized_row[key] = _normalize_input_value(value)
+                yield normalized_row
 
 #########################################################################################################
 # Main function. Five parameters See end for main procedure.
@@ -98,6 +266,9 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
     # QC_Warning = Boolean, report on informative inconsistency observations if selected, otherwise suppress them
     
 
+    if len(logger.handlers) == 0:
+        _configure_logger(project_root=_resolve_project_root())
+
     logger.info('\n')
     logger.info('Calculation FL Building & Content Losses...')
     try:
@@ -106,11 +277,8 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
         QC_Warning = QC_Warning.lower() == 'true'
 
 
-        #Get field names
-        with open(UDFOrig, "r+") as f:
-            reader = csv.reader(f)
-            field_names = next(reader)
-            #f.close()
+        # Get field names from either CSV or parquet input.
+        field_names = _get_input_field_names(UDFOrig)
         #########################################################################################################
         # UDF Input Attributes. The following are standard Hazus names/capitalizations.
         #########################################################################################################
@@ -388,7 +556,7 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
             """
             with open(UDFOrig, newline='') as csvfile:
                 writer = csv.DictWriter(file_out, delimiter=',', lineterminator='\n', fieldnames = field_names)
-                file = csv.DictReader(csvfile)
+                file = _iter_input_rows(UDFOrig) if _is_parquet_input(UDFOrig) else csv.DictReader(csvfile)
                 for row in file:
                     counter += 1#CBH - counter for unmatched SoccIds
                     try:
@@ -400,8 +568,14 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
                             continue #CBH - Change added 8/28/19
                         def getValue(name):# Get value of row from name.
                             if name != Depth_Grid:
-                                #print(name,row)
-                                val = row[name].strip() if row[name].strip() != '' else 0#CBH
+                                raw = row.get(name, '')
+                                if raw is None:
+                                    raw = ''
+                                if isinstance(raw, str):
+                                    raw = raw.strip()
+                                    val = raw if raw != '' else 0
+                                else:
+                                    val = raw
                                 try: val = float(val)#CBH
                                 except: pass#CBH
                                 return val
@@ -1015,15 +1189,75 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
 # as a geoprocessing script tool, or as a module imported in
 # another script
 
-def local(spreadsheet,fmap):
-    raster = fmap[-1]#[-1]
-    fmap = fmap[:-1]
-    cwd = os.getcwd()
-    cwd = os.path.dirname(cwd)
-    outDir = os.path.dirname(spreadsheet)
-    argv = (spreadsheet,os.path.join(cwd,r"lookuptables"),outDir,[os.path.join(cwd,'rasters',grid) for grid in raster],"False",fmap)
-    
-    print(argv)
-    print(fmap)
+def _coerce_field_map(field_map):
+    if isinstance(field_map, dict):
+        return [field_map.get(key, '') for key in DEFAULT_FIELD_MAP_KEYS]
+    if isinstance(field_map, (list, tuple)):
+        return list(field_map)
+    raise TypeError('field_map must be a dict, list, or tuple.')
+
+
+def _normalize_field_map_values(field_map):
+    normalized = []
+    for value in field_map:
+        normalized.append('' if value is None else str(value).strip())
+    return normalized
+
+
+def local_with_options(
+    inventory_path,
+    field_map,
+    raster_names_or_paths,
+    flood_type,
+    output_dir=None,
+    project_root=None,
+    log_path=None,
+    qc_warning='False',
+):
+    if not inventory_path:
+        raise ValueError('inventory_path is required.')
+
+    project_root = _resolve_project_root(project_root)
+    inventory_path = os.path.abspath(inventory_path)
+    output_dir = os.path.abspath(output_dir or os.path.dirname(inventory_path) or project_root)
+    os.makedirs(output_dir, exist_ok=True)
+
+    lookup_tables_dir = _resolve_lookup_tables_dir(project_root)
+    raster_paths = _resolve_raster_paths(raster_names_or_paths, project_root)
+    normalized_field_map = _normalize_field_map_values(_coerce_field_map(field_map))
+
+    if len(normalized_field_map) != len(DEFAULT_FIELD_MAP_KEYS):
+        raise ValueError(
+            'field_map must contain exactly {count} values for keys: {keys}'.format(
+                count=len(DEFAULT_FIELD_MAP_KEYS), keys=', '.join(DEFAULT_FIELD_MAP_KEYS)
+            )
+        )
+
+    _configure_logger(log_path=log_path, project_root=project_root)
+    full_map = normalized_field_map + [_normalize_flood_type(flood_type)]
+    argv = (inventory_path, lookup_tables_dir, output_dir, raster_paths, str(qc_warning), full_map)
     return flood_damage(*argv)
 
+
+def local(spreadsheet, fmap, project_root=None, log_path=None):
+    if not isinstance(fmap, (list, tuple)) or len(fmap) < 2:
+        raise ValueError('fmap must include mapped fields and selected raster(s).')
+
+    raster = fmap[-1]
+    mapped_values = list(fmap[:-1])
+    expected = len(DEFAULT_FIELD_MAP_KEYS) + 1
+    if len(mapped_values) != expected:
+        raise ValueError('fmap must include {count} mapped values before rasters.'.format(count=expected))
+
+    field_map = mapped_values[:-1]
+    flood_type = mapped_values[-1]
+    return local_with_options(
+        inventory_path=spreadsheet,
+        field_map=field_map,
+        raster_names_or_paths=raster,
+        flood_type=flood_type,
+        output_dir=os.path.dirname(os.path.abspath(spreadsheet)),
+        project_root=project_root,
+        log_path=log_path,
+        qc_warning='False',
+    )

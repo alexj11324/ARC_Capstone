@@ -98,6 +98,7 @@ dependencies:
   - openssl=1.1.1i=h8ffe710_0
   - palettable=3.3.0=py_0
   - pandas=1.1.4=py39h2e25243_0
+  - pyarrow
   - paramiko=2.7.2=pyh9f0ad1d_0
   - patsy=0.5.1=py_0
   - pcre=8.44=ha925a31_0

@@ -6,9 +6,12 @@ import os, csv
 #import pandas as pd
 from os import listdir
 from os.path import isfile, join
-from hazpy.flood import UDF
 import ctypes
 
+try:
+     import pyarrow.parquet as pq
+except Exception:
+     pq = None
 
 dir = os.getcwd()
 # print(dir)
@@ -59,43 +62,63 @@ defaultFields = {'OCC':['Occupancy','Occ'],
 #defaultFields.update('UserDefinedFltyId' = "")
 #print (defaultFields['UserDefinedFltyId'])                     
 
+def _is_parquet_file(path):
+     return path.lower().endswith(('.parquet','.pq'))
+
+def _read_input_fields(path):
+     if _is_parquet_file(path):
+          if pq is None:
+               raise RuntimeError('pyarrow is required for parquet input support.')
+          parquet_file = pq.ParquetFile(path)
+          return parquet_file.schema.names
+     with open(path, "r+") as f:
+          reader = csv.reader(f)
+          return next(reader)
+
+def _run_unified_fast(filename, mapped_fields):
+     try:
+          from run_fast import run_fast
+     except Exception as e:
+          return (False, 'Unified FAST engine is unavailable: ' + str(e))
+
+     try:
+          mapping = {key: mapped_fields.get(key, '') for key in fields.keys() if key not in ('flC', 'raster')}
+          return run_fast(
+               inventory_path=filename,
+               mapping=mapping,
+               flc=mapped_fields.get('flC', ''),
+               rasters=mapped_fields.get('raster', []),
+               output_dir=os.path.dirname(filename),
+               project_root=dir,
+          )
+     except Exception as e:
+          return (False, str(e))
+
 
 def runHazus():
-     entries = []
-     # print(fields)
-     entries.extend(root.fields.values())
-     #entries.append(ents['Hazard-Type*'].get(ents['Hazard-Type*'].curselection()))
-     """
-     for num, ent in enumerate(ents):# Construct a list for field names and their values for field mapping 
-          if fields[num] == 'Hazard-Type*':
-                entries.append([fields[num],ents[fields[num]].get(ents[fields[num]].curselection())])
-          #else:
-                #entries.append([fields[num],ents[fields[num]].get()])
-     """
-     # print(entries)
-     # print(root.filename)
-     #UKS 1/21/2020 - RTC CR 34227 
-     runUDF = UDF()
-     haz = runUDF.local(root.filename, entries)# Run the Hazus script with input from user using the GUI
-     #haz = hazus.local(root.filename, entries)# Run the Hazus script with input from user using the GUI
-     print('Run Hazus',haz,entries)
+     haz = _run_unified_fast(root.filename, root.fields)
+     print('Run Hazus',haz,root.fields)
      
      if haz[0]:
           popupmsg(haz[1])
      else:
-          popupmsg('Processing Failed. See log for details.')
+          popupmsg('Processing Failed. See log for details.\n' + str(haz[1]))
 
 def browse_button():
      #UKS - File open dialog changes
      initialdir = os.getcwd()
      if (initialdir.find('Python_env')!= -1):
           initialdir = os.path.dirname(initialdir)    
-     root.filename = filedialog.askopenfilename(initialdir = os.path.join(initialdir ,'UDF'),title = "Select file",filetypes = (("csv files","*.csv"),("all files","*.*")))# Gets input csv file from user
-     # Gets field names from input csv file and makes a list
+     root.filename = filedialog.askopenfilename(initialdir = os.path.join(initialdir ,'UDF'),title = "Select file",filetypes = (("csv files","*.csv"),("parquet files","*.parquet"),("all files","*.*")))# Gets input file from user
+     # Gets field names from input file and makes a list
      if root.filename != '':
-         with open(root.filename, "r+") as f:
-              reader = csv.reader(f)
-              root.csvFields = next(reader)
+         try:
+              root.csvFields = _read_input_fields(root.filename)
+         except Exception as e:
+              root.csvFields = []
+              root.filename = ''
+              popupmsg('Unable to read input file fields. Error: ' + str(e))
+              return
          print(root.filename,root.csvFields)
 
 def makeform(root, fields):# Assemble and format the fields to map from the list of fields
@@ -233,7 +256,7 @@ lab = Label(root, text="Yellow fields have not been mapped, but are not required
 #lab.pack()
 b1 = Button(root, text='Execute', command=runHazus, fg = 'Grey')# Run button to start processing
 b1.pack(side=LEFT, padx=5, pady=5)
-b2 = Button(root, text="Browse to Inventory Input (.csv)", command=browse_button)# Browse for input csv file
+b2 = Button(root, text="Browse to Inventory Input (.csv/.parquet)", command=browse_button)# Browse for input file
 b2.pack(side=LEFT, padx=5, pady=5)
 b3 = Button(root, text='Quit', command=root.destroy)
 b3.pack(side=LEFT, padx=5, pady=5)

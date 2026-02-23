@@ -4,9 +4,86 @@
 
 The Hazus Flood Assessment Structure Tool (FAST) calculates building-level flood impacts with user-provided building and flood depth data. FAST uses the Hazus Flood model methodology to assign depth damage functions to buildings according to their occupancy type, first floor elevation, foundation type, and number of stories. Flood depth is then extracted at every building and used as a depth damage function parameter to calculate flood losses in dollars. Flood-generated debris is estimated using building area in square feet. For more information about how FAST cacluates flood impacts, please refer to the Hazus Flood Technical Manual: https://www.fema.gov/media-library-data/20130726-1820-25045-8292/hzmh2_1_fl_tm.pdf
 
-Building data must be formatted as a .csv file according to the specifications outlined here: https://github.com/nhrap-hazus/FAST/blob/master/Help/FASTBuildingData.pdf Flood depth data must be formatted as a .tiff raster. Sample building data for Honolulu, HI are included in the "UDF" folder.
+Building data can be supplied as `.csv` or `.parquet` according to the specifications outlined here: https://github.com/nhrap-hazus/FAST/blob/master/Help/FASTBuildingData.pdf Flood depth data must be formatted as a `.tiff` raster. Sample building data for Honolulu, HI are included in the "UDF" folder.
 
 FAST is developed using the Hazus Python Package, HazPy. HazPy tools automatically check for updates each time they are opened. Hazus Python Package documentation is found here: https://github.com/nhrap-hazus/hazus. The Hazus Team would like to thank the Oregon Department of Geology and Mineral Industries for developing an early version of this tool: https://www.oregongeology.org/pubs/ofr/O-18-04/O-18-04_user_guide.pdf
+
+## Local Extension: Parquet Input Support
+
+This repository includes a local extension to support building inventory input from **Parquet** in addition to CSV.
+
+- Input file types in GUI: `.csv` and `.parquet`
+- Flood depth input: unchanged (`.tif/.tiff/.nc`)
+- Output files: unchanged (`.csv` and sorted `_sorted.csv`)
+
+Implementation notes:
+
+- GUI field mapping reads Parquet schema directly to populate column candidates.
+- CSV and Parquet now run through the same local Python engine in `Python_env/hazus_notinuse.py` to keep output behavior aligned.
+- A headless server entrypoint is available at `Python_env/run_fast.py` (`run_fast(...)` API + CLI).
+- `pyarrow` is required for Parquet mode and is added to `src/environment.yaml`.
+
+Current limitations:
+
+- Parquet support currently expects a single local Parquet file as input.
+- Behavior and output format are intended to stay aligned with existing FAST CSV workflows.
+
+## Server / Headless Usage
+
+Run FAST without GUI from Python or CLI. This mode supports both CSV and Parquet inventories and uses the same engine for both formats.
+
+### CLI example
+
+```bash
+python Python_env/run_fast.py \
+  --inventory UDF/ND_Minot_UDF.csv \
+  --mapping-json '{"UserDefinedFltyId":"FltyId","OCC":"Occ","Cost":"Cost","Area":"Area","NumStories":"NumStories","FoundationType":"FoundationType","FirstFloorHt":"FirstFloorHt","ContentCost":"ContentCost","BDDF_ID":"","CDDF_ID":"","IDDF_ID":"","InvCost":"","SOID":"","Latitude":"Latitude","Longitude":"Longitude"}' \
+  --flc Riverine \
+  --rasters BERYL_2024_adv41_e10_ResultMaskRaster.tif \
+  --output-dir UDF
+```
+
+`--mapping-json` can also be a file path to a JSON object.
+
+### Python API example
+
+```python
+from run_fast import run_fast
+
+mapping = {
+    "UserDefinedFltyId": "FltyId",
+    "OCC": "Occ",
+    "Cost": "Cost",
+    "Area": "Area",
+    "NumStories": "NumStories",
+    "FoundationType": "FoundationType",
+    "FirstFloorHt": "FirstFloorHt",
+    "ContentCost": "ContentCost",
+    "BDDF_ID": "",
+    "CDDF_ID": "",
+    "IDDF_ID": "",
+    "InvCost": "",
+    "SOID": "",
+    "Latitude": "Latitude",
+    "Longitude": "Longitude",
+}
+
+ok, message = run_fast(
+    inventory_path="UDF/ND_Minot_UDF.parquet",
+    mapping=mapping,
+    flc="Riverine",
+    rasters=["BERYL_2024_adv41_e10_ResultMaskRaster.tif"],
+    output_dir="UDF",
+    project_root=".",
+)
+print(ok, message)
+```
+
+### Linux/server notes
+
+- FAST lookup tables directory is `Lookuptables` (case-sensitive on Linux).
+- The engine auto-detects `Lookuptables` and writes logs to `Log/app.log` by default.
+- Required runtime packages include `pyarrow`, `gdal`, and `utm`.
 
 ## Requirements
 
@@ -55,7 +132,7 @@ To customize the damage functions used by FAST to calculate losses, review these
 
 ![Open FAST](Images/Step3.png "Open FAST")
 
-**4. Click "Browse to Inventory Input (.csv)" to select your formatted building data.**
+**4. Click "Browse to Inventory Input (.csv/.parquet)" to select your formatted building data.**
 
 ![Supply building data](Images/Step4.png "Supply building data")
 
