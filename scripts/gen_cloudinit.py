@@ -15,8 +15,8 @@ def main():
     oci_cfg = pathlib.Path(args.oci_config).read_text()
     # Fix key_file path to server path
     oci_cfg_fixed = "\n".join(
-        "key_file=/home/ubuntu/.oci/oci_api_key.pem" if l.startswith("key_file=") else l
-        for l in oci_cfg.splitlines()
+        "key_file=/home/ubuntu/.oci/oci_api_key.pem" if line.startswith("key_file=") else line
+        for line in oci_cfg.splitlines()
     )
     oci_key_b64 = base64.b64encode(
         pathlib.Path(args.oci_key).read_bytes()
