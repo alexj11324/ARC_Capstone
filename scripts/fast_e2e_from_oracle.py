@@ -573,7 +573,7 @@ def clean_state_to_fast_csv(
     firmzone_counter = Counter()
     zone_class_counter = Counter()
     written_by_flc = Counter()
-    seen_bids: dict[str, float] = {}  # Task 3: dedup by bid, keep highest val_struct
+    seen_bids: set[str] = set()  # Task 3: dedup by bid+lat+lon to avoid duplicate FltyIds
 
     input_rows = 0
     written_rows = 0
@@ -615,9 +615,6 @@ def clean_state_to_fast_csv(
                 ):
                     dropped["missing_or_invalid_required"] += 1
                     continue
-                if occ is None:
-                    dropped["invalid_occ"] += 1
-                    continue
                 if foundation not in {2, 4, 5, 7}:
                     dropped["invalid_foundation_type"] += 1
                     continue
@@ -645,12 +642,10 @@ def clean_state_to_fast_csv(
 
                 # --- Task 3: FltyId deduplication ---
                 dedup_key = f"{bid}_{latitude}_{longitude}"
-                if bid in seen_bids:
-                    if cost <= seen_bids[bid]:
-                        dropped["duplicate_bid"] += 1
-                        continue
-                    dropped["duplicate_bid_replaced"] += 1
-                seen_bids[bid] = cost
+                if dedup_key in seen_bids:
+                    dropped["duplicate_bid"] += 1
+                    continue
+                seen_bids.add(dedup_key)
 
                 zone_class = classify_firmzone(firmzone, coastal_a_codes, coastal_v_codes)
                 if zone_class is not None:
