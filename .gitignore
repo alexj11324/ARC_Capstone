@@ -15,3 +15,6 @@ __pycache__/
 # Local logs and temporary files
 *.log
 *.tmp
+
+# Local cloud-drive shortcut/symlink (machine-specific)
+Red Cross Capstone Project
