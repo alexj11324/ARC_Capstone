@@ -716,6 +716,27 @@ def find_fast_outputs(output_dir: Path) -> tuple[Path | None, Path | None]:
     return primary, sorted_match
 
 
+def count_csv_data_rows(csv_path: Path) -> int:
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.reader(handle)
+        next(reader, None)
+        return sum(1 for _ in reader)
+
+
+def validate_fast_output_pair(
+    primary_csv: Path | None,
+    sorted_csv: Path | None,
+) -> tuple[bool, int, int]:
+    if primary_csv is None or sorted_csv is None:
+        return False, 0, 0
+    if not primary_csv.exists() or not sorted_csv.exists():
+        return False, 0, 0
+    primary_rows = count_csv_data_rows(primary_csv)
+    sorted_rows = count_csv_data_rows(sorted_csv)
+    is_valid = primary_rows > 0 and sorted_rows > 0 and primary_rows == sorted_rows
+    return is_valid, primary_rows, sorted_rows
+
+
 def run_fast_job(
     task: dict[str, Any],
     resume: bool,
@@ -732,7 +753,11 @@ def run_fast_job(
 
     if resume:
         existing_primary, existing_sorted = find_fast_outputs(output_dir)
-        if existing_primary is not None and existing_sorted is not None:
+        outputs_valid, primary_rows, sorted_rows = validate_fast_output_pair(
+            existing_primary,
+            existing_sorted,
+        )
+        if outputs_valid:
             return {
                 "state": state,
                 "flc": flc,
@@ -743,6 +768,8 @@ def run_fast_job(
                 "skipped": True,
                 "primary_csv": str(existing_primary),
                 "sorted_csv": str(existing_sorted),
+                "primary_rows": primary_rows,
+                "sorted_rows": sorted_rows,
                 "stdout": "",
                 "stderr": "",
             }
@@ -768,7 +795,17 @@ def run_fast_job(
     ]
     result = run_command(command, check=False)
     primary_csv, sorted_csv = find_fast_outputs(output_dir)
-    success = result.returncode == 0 and primary_csv is not None and sorted_csv is not None
+    outputs_valid, primary_rows, sorted_rows = validate_fast_output_pair(primary_csv, sorted_csv)
+    success = result.returncode == 0 and outputs_valid
+    validation_error = ""
+    if not outputs_valid:
+        validation_error = (
+            "Invalid FAST output pair: primary_rows={primary}, sorted_rows={sorted}".format(
+                primary=primary_rows,
+                sorted=sorted_rows,
+            )
+        )
+
     return {
         "state": state,
         "flc": flc,
@@ -779,8 +816,11 @@ def run_fast_job(
         "skipped": False,
         "primary_csv": str(primary_csv) if primary_csv else None,
         "sorted_csv": str(sorted_csv) if sorted_csv else None,
+        "primary_rows": primary_rows,
+        "sorted_rows": sorted_rows,
         "stdout": result.stdout,
         "stderr": result.stderr,
+        "validation_error": validation_error,
         "command": command,
     }
 
