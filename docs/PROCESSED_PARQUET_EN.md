@@ -154,7 +154,7 @@ No `topograp_9`; `topography` is an integer.
 
 ## 5. Relationship to FAST
 
-- **Building Inventory CSV**: Derived from NSI Parquet by selecting and renaming columns; see `NSI_DATA_DICTIONARY_EN.md` and the FAST input specification.
+- **Building Inventory CSV**: Derived from NSI Parquet by selecting and renaming columns; see `docs/data_dictionary/NSI_DATA_DICTIONARY_EN.md` and the FAST input specification.
 - **Flood Depth Raster**: FAST consumes GeoTIFF; you must rasterize SLOSH geometry plus a chosen surge elevation column into a .tif, rather than pointing FAST directly to Parquet.
 
 ---

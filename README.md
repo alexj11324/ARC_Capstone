@@ -68,7 +68,7 @@ FAST-main/
 
 - `CLAUDE.md` — Agent instructions, data contracts, known issues
 - `AGENTS.md` — Execution contract and column mapping rules
-- `NSI_DATA_DICTIONARY_EN.md` / `SLOSH_DATA_DICTIONARY_EN.md` — Field definitions
+- `docs/data_dictionary/NSI_DATA_DICTIONARY_EN.md` / `docs/data_dictionary/SLOSH_DATA_DICTIONARY_EN.md` — Field definitions
 
 ## Output
 

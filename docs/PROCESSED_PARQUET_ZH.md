@@ -154,7 +154,7 @@
 
 ## 5. 与 FAST 的对应关系
 
-- **建筑清单 CSV**：可从 NSI Parquet 中选取并重命名列，导出为 CSV，参见项目内 FAST 输入要求及 `NSI_DATA_DICTIONARY_ZH.md`。
+- **建筑清单 CSV**：可从 NSI Parquet 中选取并重命名列，导出为 CSV，参见项目内 FAST 输入要求及 `docs/data_dictionary/NSI_DATA_DICTIONARY_ZH.md`。
 - **水深栅格**：FAST 需要 GeoTIFF；需用 SLOSH 的几何 + 某一档水深/浪高列做栅格化得到 .tif，而非直接读 Parquet。
 
 ---
