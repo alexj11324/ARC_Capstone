@@ -3,7 +3,15 @@ exports/
 
 # Python caches
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
 
 # Local assistant configs
 .claude/
+
+# macOS / Finder
+.DS_Store
+
+# Local logs and temporary files
+*.log
+*.tmp
