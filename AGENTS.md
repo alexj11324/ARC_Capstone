@@ -121,3 +121,24 @@ When asking, provide exactly what is missing and a recommended default.
 2. Do not switch data model without explicit request.
 3. Do not expand scope to OCI/DB refactors unless user asks.
 4. Keep changes focused on NSI -> FAST CSV, SLOSH -> raster, and FAST execution.
+
+## 9. Skill Routing for Repository Organization
+
+When user intent is repository organization, default to the `repo-ia-reorg` skill without requiring explicit skill mention.
+
+### 9.1 Auto-trigger keywords
+
+Trigger on organization intents including:
+
+1. "organize", "organization", "tidy", "clean up", "declutter"
+2. "reorg", "reorganize", "restructure"
+3. Chinese intents like "组织", "整理", "重整", "信息架构重排", "代码库太乱"
+
+### 9.2 `rebase` disambiguation rule
+
+`rebase` alone is not a trigger. Use `repo-ia-reorg` only when `rebase` appears with structure-cleanup context, such as:
+
+1. root/docs/path/layout reorganization
+2. file moves, archive consolidation, or IA cleanup
+
+If `rebase` is requested as a pure git-history operation, do not trigger this skill.
