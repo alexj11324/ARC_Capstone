@@ -1,0 +1,9 @@
+# Large generated artifacts
+exports/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Local assistant configs
+.claude/
