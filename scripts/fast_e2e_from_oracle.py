@@ -574,6 +574,7 @@ def clean_state_to_fast_csv(
     zone_class_counter = Counter()
     written_by_flc = Counter()
     seen_bids: set[str] = set()  # Task 3: dedup by bid+lat+lon to avoid duplicate FltyIds
+    valid_foundation_types: set[int] = set(found_type_map.values())
 
     input_rows = 0
     written_rows = 0
@@ -615,7 +616,7 @@ def clean_state_to_fast_csv(
                 ):
                     dropped["missing_or_invalid_required"] += 1
                     continue
-                if foundation not in {2, 4, 5, 7}:
+                if foundation not in valid_foundation_types:
                     dropped["invalid_foundation_type"] += 1
                     continue
                 if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
