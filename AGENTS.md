@@ -108,6 +108,11 @@ Ask only when blocked by missing irrecoverable inputs, such as:
 
 When asking, provide exactly what is missing and a recommended default.
 
+### 6.3 Self-Serve Before Asking (Global)
+
+Before asking any question, you must first search for relevant tools, CLI commands, and files in this repo.
+Do not ask for information that is discoverable from tools, the CLI, or the filesystem.
+
 ## 7. Output Standards
 
 1. Prefer deterministic, reproducible scripts and commands.
