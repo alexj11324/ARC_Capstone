@@ -2,13 +2,25 @@
 
 CMU Heinz MSPPM 2026 Capstone Project for the American Red Cross.
 
-Property-level storm surge/tsunami impact modeling using FEMA's FAST tool, USACE National Structure Inventory (30M+ buildings), and NOAA SLOSH surge models. Estimates building damage, displaced population, and high-need populations to inform Red Cross shelter and casework planning.
+Property-level storm surge/tsunami impact modeling using FEMA's FAST tool, USACE National Structure Inventory (30M+ buildings), and NOAA SLOSH surge models. The pipeline produces **county-level Population Affected and Population Impacted estimates classified by Low/Medium/High intensity zones**, feeding directly into ARC's Mass Care Planning Assumptions Spreadsheet for shelter, feeding, and emergency supply planning.
 
-## Architecture
+## End-to-End Architecture
 
 ```
-NSI Parquet (Oracle) → clean/filter → FAST CSV ─┐
-SLOSH Parquet → rasterize → GeoTIFF (.tif) ─────┤→ FAST engine → damage predictions
+NHC Advisory (storm surge forecast)
+    ↓
+SLOSH Parquet → rasterize → GeoTIFF (.tif) ──┐
+NSI Parquet (Oracle) → clean/filter → FAST CSV ┤→ FAST engine → building-level damage
+                                                ↓
+                                 Classify each building into L/M/H intensity zone
+                                   (surge >12ft=High, 9-12ft=Med, 4-8ft=Low)
+                                                ↓
+                                 County-level aggregation (Athena spatial join)
+                                                ↓
+                                 CSV output: Pop Affected (L/M/H) + Pop Impacted (L/M/H)
+                                                ↓
+                                 ARC Planning Assumptions Spreadsheet (columns J-R)
+                                   → Shelter / Feeding / DES estimates
 ```
 
 See `docs/pipeline_flowchart.md` for the full Mermaid diagram.
@@ -43,17 +55,35 @@ python scripts/slosh_to_raster.py --basin ny3mom --category 3 --tide high
 
 ```
 scripts/
-  fast_e2e_from_oracle.py   # Main E2E pipeline
-  h3_spatial_index.py       # H3 hex spatial filtering
-  duckdb_fast_pipeline.py   # DuckDB-accelerated pipeline
-  slosh_to_raster.py        # SLOSH → GeoTIFF converter
+  fast_e2e_from_oracle.py       # Main E2E pipeline: Oracle → FAST → predictions
+  h3_spatial_index.py           # H3 hex spatial filtering
+  duckdb_fast_pipeline.py       # DuckDB-accelerated pipeline
+  slosh_to_raster.py            # SLOSH → GeoTIFF converter
+research/
+  population_impact/
+    DIRECTION.md                # Project direction & pivot rationale
+    PLAN_ZH.md / PLAN_EN.md     # Implementation plan (中/EN)
+    scripts/
+      01_county_damage_agg.py   # Athena county-level damage aggregation
+      02_fetch_census_svi.py    # Census population + CDC SVI data
+      03_build_and_train.py     # Feature matrix builder + model training
+    data/
+      county_event_features.csv # 386 county-event rows (9 events)
+      census_county_population.csv
+    outputs/
+      validation_report.md      # LOEO-CV validation results
+      predictions.csv           # County-level predictions vs ground truth
+      arc_shelter_planning_template.xlsx
+      metrics.json
+    notebooks/
+      deploy_population_impact.ipynb  # Colab deployment notebook
 configs/
-  fast_e2e.yaml             # Pipeline configuration
-  event_state_map.yaml      # Hurricane → state mapping
+  fast_e2e.yaml                 # Pipeline configuration
+  event_state_map.yaml          # Hurricane → state mapping
 docs/
-  pipeline_flowchart.md     # Architecture diagram
+  pipeline_flowchart.md         # Architecture diagram
 FAST-main/
-  Python_env/run_fast.py    # FAST headless engine
+  Python_env/run_fast.py        # FAST headless engine
 ```
 
 ## Data Sources
@@ -68,11 +98,36 @@ FAST-main/
 
 - `CLAUDE.md` — Agent instructions, data contracts, known issues
 - `AGENTS.md` — Execution contract and column mapping rules
+- `research/population_impact/DIRECTION.md` — Project direction pivot & new pipeline design
+- `research/population_impact/PLAN_ZH.md` — Implementation plan with experimental results
+- `research/population_impact/outputs/validation_report.md` — Model validation report
 - `docs/data_dictionary/NSI_DATA_DICTIONARY_EN.md` / `docs/data_dictionary/SLOSH_DATA_DICTIONARY_EN.md` — Field definitions
 
 ## Output
 
-Per-building: `BldgDmgPct` (% damaged), `BldgLossUSD` ($ loss), `Depth_in_Struc` (ft). These feed into population disruption and Red Cross service demand estimates.
+### Building-Level (FAST)
+
+Per-building: `BldgDmgPct` (% damaged), `BldgLossUSD` ($ loss), `Depth_in_Struc` (ft), `Depth_Grid` (surge depth at location).
+
+### County-Level (Population Impact)
+
+Per county per event, classified by intensity zone:
+
+| Output | Columns | Description |
+|--------|---------|-------------|
+| Population Affected | L / M / H | All residents in surge zone, by intensity |
+| Population Impacted | L / M / H | Residents with structural damage requiring displacement |
+| Households Needing Shelter | L / M / H | Impacted × ARC conversion rates (H=5%, M=3%, L=1%) |
+
+**Intensity classification** (from ARC Mass Care Planning Assumptions, Figure 9):
+
+| Zone | Storm Surge | Building Damage |
+|------|------------|-----------------|
+| High | >12 ft | >35% destroyed |
+| Medium | 9-12 ft | 11-34% destroyed |
+| Low | 4-8 ft | 0-10% destroyed |
+
+Output format: CSV by county, compatible with ARC's Mass Care Planning Assumptions Spreadsheet (columns J-R).
 
 ---
 
@@ -190,6 +245,16 @@ SELECT event,
 FROM arc_storm_surge.predictions
 GROUP BY event ORDER BY total_loss_B DESC;
 ```
+
+---
+
+## Population Impact Research
+
+The `research/population_impact/` directory contains the population impact estimation pipeline. Key finding from client meetings: ARC needs **Population Affected/Impacted by county in L/M/H intensity zones** — not direct shelter population prediction.
+
+The pipeline classifies 3.5M building-level FAST predictions into intensity zones using surge depth thresholds, aggregates to county level, and outputs in a format compatible with ARC's Mass Care Planning Assumptions Spreadsheet.
+
+See `research/population_impact/DIRECTION.md` for the full rationale and implementation plan.
 
 ---
 
