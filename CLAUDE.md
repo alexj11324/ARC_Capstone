@@ -62,7 +62,7 @@ python scripts/05_format_for_spreadsheet.py --input data/county_lmh_features.csv
 
 # Phase 3: Validate against Ground Truth
 python scripts/06_validate_lmh.py --input outputs/planning_assumptions_output.csv \
-  --gt "../../Ground Truth Data.xlsx" --output-dir outputs
+  --gt "../../data/Ground Truth Data.xlsx" --output-dir outputs
 
 # Dry-run (print SQL without executing)
 python scripts/04_classify_lmh.py --dry-run
