@@ -12,7 +12,7 @@ Outputs:
 Usage:
     python 06_validate_lmh.py \
         --input outputs/planning_assumptions_output.csv \
-        --gt "../../Ground Truth Data.xlsx" \
+        --gt "../../data/Ground Truth Data.xlsx" \
         --output-dir outputs
 """
 
@@ -516,7 +516,7 @@ def main():
     )
     parser.add_argument(
         "--gt",
-        default="../../Ground Truth Data.xlsx",
+        default="../../data/Ground Truth Data.xlsx",
         help="Ground Truth Excel file path",
     )
     parser.add_argument(

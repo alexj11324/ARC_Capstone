@@ -12,7 +12,7 @@ Output: predictions, LOEO-CV report, model artifacts.
 Usage:
     python 03_build_and_train.py \
         --features data/county_event_features.csv \
-        --ground-truth "../../Ground Truth Data.xlsx" \
+        --ground-truth "../../data/Ground Truth Data.xlsx" \
         --census data/census_county_population.csv \
         --svi data/cdc_svi_by_county.csv \
         --output-dir outputs

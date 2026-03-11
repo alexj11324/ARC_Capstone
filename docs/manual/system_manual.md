@@ -8,7 +8,7 @@ To achieve rapid iteration and avoid the classic GIS latency traps of large SQL 
 - **DuckDB**: Replaces traditional database environments to load partitioned `.parquet` payloads directly from disk/blob memory. 
 - **Decoupled Engine**: The FEMA FAST utility operates as a black-box local shell execution, receiving structural damage states natively formatted via our pipeline.
 
-*For rigorous architectural diagrams and interface specs, refer to our [C4 Context & Container documentation](../../C4-Documentation/).*
+*For rigorous architectural diagrams and interface specs, refer to our [C4 Context & Container documentation](../architecture/).*
 
 ## 3. High-Level Data Flow
 1. **Trigger Phase**: The pipeline initiates via `launch_cloud_parallel.sh` pointing to a unified YAML configuration mapping storms to geographical basins.
@@ -21,7 +21,7 @@ To achieve rapid iteration and avoid the classic GIS latency traps of large SQL 
 - **Language**: Strictly Python 3.10+
 - **Version Control**: Conventional Commits are aggressively enforced. Use `feat:`, `fix:`, `docs:`.
 - **Testing**: Test-Driven Development (TDD) is mandated for algorithmic units, notably boundary conditions when joining structures near the coast.
-- **Formatting**: Run `black` and `isort` prior to PR submissions. Detailed code conventions exist in `conductor/code_styleguides/python_data.md`.
+- **Formatting**: Run `black` and `isort` prior to PR submissions. Detailed code conventions exist in `../governance/code_styleguides/python_data.md`.
 
 ## 5. Deployment and Operation
 As an ephemeral cloud pipeline:
