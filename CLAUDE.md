@@ -38,7 +38,7 @@ FAST predictions (Athena)
     → Planning Assumptions Spreadsheet (columns J-R)
 ```
 
-Scripts live in `research/population_impact/scripts/` (01–06, executed sequentially). Full flowchart: `docs/pipeline_flowchart.md`. Implementation plan: `research/population_impact/IMPLEMENTATION_PLAN.md`.
+Scripts live in `research/population_impact/scripts/` (04–06, executed sequentially). Full flowchart: `docs/pipeline_flowchart.md`.
 
 **Intensity zone classification logic** (surge-primary, damage-fallback):
 - `depth_grid > 12ft` → HIGH | `>= 9ft` → MEDIUM | `>= 4ft` → LOW
@@ -51,7 +51,7 @@ Scripts live in `research/population_impact/scripts/` (01–06, executed sequent
 | Dataset | Format | Location |
 |---------|--------|----------|
 | **NSI** (National Structure Inventory) | Parquet, partitioned by state | Local filesystem or via `download_nsi_by_state.py` |
-| **NHC P-Surge rasters** | GeoTIFF (.tif), flood depth in feet | `FAST-main/rasters/` — 27 rasters (9 events x 3 advisories) |
+| **NHC P-Surge rasters** | GeoTIFF (.tif), flood depth in feet, downloaded directly from NHC | `FAST-main/rasters/` — 27 rasters (9 events x 3 advisories) |
 | **Ground Truth** | Excel | `Ground Truth Data.xlsx` — 9 hurricanes 2018-2024 |
 | **FAST Depth-Damage Functions** | CSV/Excel lookup tables | `FAST-main/Lookuptables/` |
 | **Census ACS 5-year** | API | County population for L/M/H pipeline |
@@ -70,12 +70,9 @@ Scripts live in `research/population_impact/scripts/` (01–06, executed sequent
 |--------|---------|
 | `scripts/duckdb_fast_pipeline.py` | **Primary pipeline**: NSI Parquet → FAST CSV via DuckDB SQL |
 | `scripts/fast_e2e_from_oracle.py` | Legacy E2E pipeline (row-by-row Python) |
-| `research/population_impact/scripts/01_county_damage_agg.py` | Event-level county aggregation of FAST predictions (pre-L/M/H) |
-| `research/population_impact/scripts/02_fetch_census_svi.py` | Pull county ACS + SVI metrics for population impact pipeline |
-| `research/population_impact/scripts/03_build_and_train.py` | Train ML damage model variant on FAST output |
 | `scripts/download_nsi_by_state.py` | Download NSI from USACE API → GeoJSON → Parquet (state-by-state) |
 | `scripts/nsi_raw_to_parquet.py` | Raw NSI GPKG/GeoJSON → Parquet conversion (DuckDB or geopandas engine) |
-| `scripts/slosh_to_raster.py` | SLOSH Parquet → GeoTIFF (inundation = surge - topography) |
+| `scripts/slosh_to_raster.py` | (Legacy) SLOSH Parquet → GeoTIFF; not used in active pipeline — rasters downloaded directly from NHC |
 | `scripts/h3_spatial_index.py` | H3 hex pre-filtering: raster valid pixels → H3 cells → filter NSI buildings |
 | `scripts/ml_damage_model.py` | ML alternative to FAST DDFs (LightGBM/XGBoost on FAST output) |
 | `scripts/validate_pipeline.py` | Post-run validation: schema checks + aggregate stats on predictions CSV |
@@ -112,9 +109,6 @@ python scripts/duckdb_fast_pipeline.py --state Florida
 # Legacy E2E pipeline
 python scripts/fast_e2e_from_oracle.py \
   --state-scope Florida --raster-name auto --config configs/fast_e2e.yaml
-
-# SLOSH Parquet → GeoTIFF raster
-python scripts/slosh_to_raster.py --basin ny3mom --category 3 --tide high
 
 # H3 spatial pre-indexing
 python scripts/h3_spatial_index.py --raster path/to/raster.tif --resolution 7
@@ -174,11 +168,6 @@ Defined in `scripts/nsi_raw_to_parquet.py:TARGET_SCHEMA` — 31 columns includin
 - 9 events: BERYL, DEBBY, FLORENCE, HELENE, IAN, IDALIA, IDA, MICHAEL, MILTON
 - 3 advisories each, 27 rasters total, ~3.9M building-level predictions
 
-### SLOSH → Raster (when rasterizing from source)
-
-- Geometry: `geometry_wkt` | Surge: `cN_mean`/`cN_high` (N=0..5) | Terrain: `topography`
-- Inundation depth = surge elevation - topography; output GeoTIFF in feet, NODATA=-9999
-
 ### FAST Runtime Parameters
 
 - `flC`: `CoastalA` (default for storm surge) | `CoastalV` (high-risk) | `Riverine` (inland only)
@@ -212,7 +201,7 @@ No dedup on `bid` across parquet files — duplicate FltyIds inflate damage tota
 ## Conventions
 
 - **Commit messages**: Conventional Commits — `feat:`, `fix:`, `docs:`, `chore:` etc.
-- **Code style**: Python 3.10+, strict type hints, `black`/`ruff` formatting (line limit 120), `isort` for imports. Details in `conductor/code_styleguides/python_data.md` (mirrored at `docs/governance/code_styleguides/python_data.md`).
+- **Code style**: Python 3.10+, strict type hints, `black`/`ruff` formatting (line limit 120), `isort` for imports. Details in `docs/governance/code_styleguides/python_data.md`.
 - **TDD**: Required for data transformation functions. Mock parquet payloads locally.
 - **Execution contract**: AGENTS.md defines hard rules for agent behavior — follow it by default.
 - **Governance docs**: `docs/governance/` tracks workflow, tech stack, product definition.
@@ -223,8 +212,8 @@ No dedup on `bid` across parquet files — duplicate FltyIds inflate damage tota
 |----------|------|
 | Agent execution contract | `AGENTS.md` |
 | Pipeline flowchart (end-to-end) | `docs/pipeline_flowchart.md` |
-| C4 architecture diagrams | `C4-Documentation/c4-*.md` |
-| L/M/H implementation plan | `research/population_impact/IMPLEMENTATION_PLAN.md` |
+| E2E Mermaid diagram | `docs/architecture/e2e_pipeline.md` |
+| C4 architecture diagrams | `docs/architecture/c4-*.md` |
 | System manual | `docs/manual/system_manual.md` |
 | Onboarding guide | `docs/wiki/zero_to_hero.md` |
 | NSI data dictionary | `docs/data_dictionary/NSI_DATA_DICTIONARY_EN.md` |

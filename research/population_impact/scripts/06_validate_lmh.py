@@ -25,8 +25,7 @@ import numpy as np
 import pandas as pd
 
 # ---------------------------------------------------------------------------
-# Event name mapping (Ground Truth uses short names, our pipeline uses EVENT_YEAR)
-# Copied from 03_build_and_train.py
+# Event name mapping: Ground Truth uses short names; pipeline uses EVENT_YEAR format
 # ---------------------------------------------------------------------------
 GT_EVENT_MAP = {
     "Beryl": "BERYL_2024",
@@ -40,7 +39,7 @@ GT_EVENT_MAP = {
     "Milton": "MILTON_2024",
 }
 
-# Baseline metrics from previous approaches (PLAN_ZH.md Section 8.2)
+# Baseline metrics from previous approaches (deprecated ML pipeline)
 BASELINE_TIER1 = {"name": "Tier 1 (flat 0.73% shelter rate)", "rmse": 546.6, "mae": 315.9, "r2": None}
 BASELINE_TIER2 = {"name": "Tier 2 (ML ensemble LOEO-CV)", "rmse": 407.6, "mae": 225.8, "r2": -0.308}
 
@@ -64,8 +63,7 @@ def log(msg: str) -> None:
 def load_ground_truth(path: Path) -> pd.DataFrame:
     """Load and normalize Ground Truth Excel.
 
-    Copied from 03_build_and_train.py:75-92 with the same FIPS normalization
-    pattern.
+    Normalizes event names via GT_EVENT_MAP and zero-pads county FIPS to 5 digits.
     """
     raw = pd.read_excel(path, engine="openpyxl")
     df = pd.DataFrame()
