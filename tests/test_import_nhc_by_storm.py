@@ -84,7 +84,6 @@ def test_importer_handles_no_overlapping_states(mock_states, mock_sjoin):
 
     assert result["states"] == []
     result["data"].close()
-    result["data"].close()
 
 
 def test_normalizes_storm_id_with_two_digit_year():

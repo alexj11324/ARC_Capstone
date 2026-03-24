@@ -97,12 +97,12 @@ ARC_Capstone/
 
 ### Data Flow Execution
 
-1. `SLOSH warning` is caught and converted to a bounding box raster map by `slosh_to_raster`.
-2. Python uses `PyArrow` to sweep the `NSI_Baseline.parquet` (AWS S3 source).
-3. `duckdb` memory engines are initialized; a query executes `ST_MakeValid` geometric bounding matching on both components inside memory.
-4. Results (water heights at coordinates) are flattened and dumped as `fast_input.csv` down to the local file system.
-5. The `FEMA FAST` sub-shell is invoked, reading the structures, comparing it with static building `Cost` tables, and producing a metric called `BldgDmgPct`.
-6. Result mapped back to S3 for Red Cross operators to query in Athena.
+1. **Raster acquisition**: NHC P-Surge GeoTIFF rasters are downloaded directly from NHC (via `import_nhc_by_storm.py` or manually). The legacy `slosh_to_raster.py` is no longer used.
+2. **NSI loading**: `PyArrow` reads NSI Parquet files (partitioned by state, from local disk or S3).
+3. **Spatial filtering**: `duckdb_fast_pipeline.py` initializes a DuckDB in-memory engine, applies bbox clipping, deduplicates by building ID, and maps NSI columns to FAST schema.
+4. **FAST input**: Matching buildings are exported as `fast_input.csv` to the local file system.
+5. **Damage scoring**: The FEMA FAST engine (`run_fast.py`) reads the structures, applies depth-damage functions by occupancy type, and produces `BldgDmgPct`.
+6. **Upload**: Results are mapped back to S3 for Red Cross operators to query in Athena.
 
 ---
 

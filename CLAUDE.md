@@ -137,6 +137,7 @@ Scripts live in `research/population_impact/scripts/` (04–06, executed sequent
 | `scripts/fast_e2e_from_oracle.py` | Legacy E2E pipeline (row-by-row Python) |
 | `scripts/download_nsi_by_state.py` | Download NSI from USACE API → GeoJSON → Parquet (state-by-state) |
 | `scripts/nsi_raw_to_parquet.py` | Raw NSI GPKG/GeoJSON → Parquet conversion (DuckDB or geopandas engine) |
+| `scripts/import_nhc_by_storm.py` | Download NHC P-Surge raster by storm ID/advisory, identify affected states |
 | `scripts/slosh_to_raster.py` | (Legacy) SLOSH Parquet → GeoTIFF; not used in active pipeline — rasters downloaded directly from NHC |
 | `scripts/h3_spatial_index.py` | H3 hex pre-filtering: raster valid pixels → H3 cells → filter NSI buildings |
 | `scripts/ml_damage_model.py` | ML alternative to FAST DDFs (LightGBM/XGBoost on FAST output) |

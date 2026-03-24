@@ -19,10 +19,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import csv
 import io
-import json
-import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -77,6 +74,7 @@ CENSUS_API_BASE = "https://api.census.gov/data/2022/acs/acs5"
 # Logging
 # ---------------------------------------------------------------------------
 
+
 def log(msg: str) -> None:
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
@@ -85,6 +83,7 @@ def log(msg: str) -> None:
 # ---------------------------------------------------------------------------
 # Census data helpers
 # ---------------------------------------------------------------------------
+
 
 def _safe_int(val) -> int:
     try:
@@ -124,12 +123,14 @@ def fetch_census_population(output_path: Path) -> pd.DataFrame:
         county_name = parts[0] if parts else name_raw
         state_name = parts[1] if len(parts) > 1 else ""
 
-        rows.append({
-            "county_fips5": county_fips5,
-            "county_name": county_name,
-            "state": state_name,
-            "total_population": _safe_int(record.get("B01001_001E", 0)),
-        })
+        rows.append(
+            {
+                "county_fips5": county_fips5,
+                "county_name": county_name,
+                "state": state_name,
+                "total_population": _safe_int(record.get("B01001_001E", 0)),
+            }
+        )
 
     df = pd.DataFrame(rows)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -166,10 +167,7 @@ def load_census(census_path: Path) -> pd.DataFrame:
         # Ensure required columns
         for col in ("county_fips5", "county_name", "state", "total_population"):
             if col not in df.columns:
-                raise RuntimeError(
-                    f"Census CSV missing required column '{col}'. "
-                    f"Available: {list(df.columns)}"
-                )
+                raise RuntimeError(f"Census CSV missing required column '{col}'. Available: {list(df.columns)}")
 
         log(f"  Loaded {len(df)} counties from local CSV")
         return df[["county_fips5", "county_name", "state", "total_population"]]
@@ -182,6 +180,7 @@ def load_census(census_path: Path) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # SVI data helpers
 # ---------------------------------------------------------------------------
+
 
 def fetch_svi_data(output_path: Path) -> pd.DataFrame:
     """Download CDC SVI 2022 county-level data and save locally.
@@ -219,9 +218,7 @@ def load_svi(svi_path: Path) -> pd.DataFrame:
         df = pd.read_csv(svi_path, dtype={"county_fips5": str})
         df["county_fips5"] = df["county_fips5"].str.zfill(5)
         if "svi_score" not in df.columns:
-            raise RuntimeError(
-                f"SVI CSV missing 'svi_score' column. Available: {list(df.columns)}"
-            )
+            raise RuntimeError(f"SVI CSV missing 'svi_score' column. Available: {list(df.columns)}")
         log(f"  Loaded SVI for {len(df)} counties")
         return df[["county_fips5", "svi_score"]]
 
@@ -245,21 +242,19 @@ def apply_svi_bump(df: pd.DataFrame, bump_weight: float = SVI_HIGH_BUMP_WEIGHT) 
     bump_factor = 1 + bump_weight * df["svi_score"]
 
     # Only bump HIGH zone impacted population
-    df["pop_impacted_high"] = df["pop_impacted_high"].where(
-        ~has_svi, df["pop_impacted_high"] * bump_factor
-    )
+    df["pop_impacted_high"] = df["pop_impacted_high"].where(~has_svi, df["pop_impacted_high"] * bump_factor)
 
     df["svi_bump_applied"] = has_svi
     n_bumped = has_svi.sum()
     avg_bump = (bump_factor[has_svi].mean() - 1) * 100 if n_bumped > 0 else 0
-    log(f"  SVI bump applied to {n_bumped} county-events "
-        f"(avg bump: +{avg_bump:.1f}% on HIGH zone)")
+    log(f"  SVI bump applied to {n_bumped} county-events (avg bump: +{avg_bump:.1f}% on HIGH zone)")
     return df
 
 
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
 
 def load_lmh_features(input_path: Path) -> pd.DataFrame:
     """Load Phase 1 wide-format L/M/H features."""
@@ -268,15 +263,10 @@ def load_lmh_features(input_path: Path) -> pd.DataFrame:
     df["county_fips5"] = df["county_fips5"].str.zfill(5)
 
     # Verify expected columns exist
-    expected_pop_cols = [f"pop_affected_{z}" for z in ZONES] + [
-        f"pop_impacted_{z}" for z in ZONES
-    ]
+    expected_pop_cols = [f"pop_affected_{z}" for z in ZONES] + [f"pop_impacted_{z}" for z in ZONES]
     missing = [c for c in expected_pop_cols if c not in df.columns]
     if missing:
-        raise RuntimeError(
-            f"L/M/H features file missing columns: {missing}. "
-            f"Available: {list(df.columns)}"
-        )
+        raise RuntimeError(f"L/M/H features file missing columns: {missing}. Available: {list(df.columns)}")
 
     log(f"  Loaded {len(df)} rows, {df['event'].nunique()} events")
     return df
@@ -285,12 +275,8 @@ def load_lmh_features(input_path: Path) -> pd.DataFrame:
 def apply_conversion_rates(df: pd.DataFrame) -> pd.DataFrame:
     """Compute shelter and feeding household estimates from pop_impacted."""
     for zone in ZONES:
-        df[f"hh_shelter_{zone}"] = (
-            df[f"pop_impacted_{zone}"] * SHELTER_RATES[zone]
-        )
-        df[f"hh_feeding_{zone}"] = (
-            df[f"pop_impacted_{zone}"] * FEEDING_RATES[zone]
-        )
+        df[f"hh_shelter_{zone}"] = df[f"pop_impacted_{zone}"] * SHELTER_RATES[zone]
+        df[f"hh_feeding_{zone}"] = df[f"pop_impacted_{zone}"] * FEEDING_RATES[zone]
     return df
 
 
@@ -320,9 +306,7 @@ def run_sanity_checks(df: pd.DataFrame) -> pd.DataFrame:
             log(f"  WARNING: {count} rows have total pop_affected > census_pop — scaling down")
             scale = df.loc[excess_mask, "census_pop"] / total_affected[excess_mask]
             for zone in ZONES:
-                df.loc[excess_mask, f"pop_affected_{zone}"] = (
-                    df.loc[excess_mask, f"pop_affected_{zone}"] * scale
-                )
+                df.loc[excess_mask, f"pop_affected_{zone}"] = df.loc[excess_mask, f"pop_affected_{zone}"] * scale
                 # Re-clip impacted after scaling affected
                 imp_col = f"pop_impacted_{zone}"
                 aff_col = f"pop_affected_{zone}"
@@ -332,9 +316,11 @@ def run_sanity_checks(df: pd.DataFrame) -> pd.DataFrame:
             n_issues += count
 
     # Check 3: All values >= 0
-    numeric_cols = [c for c in df.columns if any(
-        c.startswith(p) for p in ("pop_affected_", "pop_impacted_", "hh_shelter_", "hh_feeding_")
-    )]
+    numeric_cols = [
+        c
+        for c in df.columns
+        if any(c.startswith(p) for p in ("pop_affected_", "pop_impacted_", "hh_shelter_", "hh_feeding_"))
+    ]
     for col in numeric_cols:
         neg_mask = df[col] < 0
         if neg_mask.any():
@@ -394,12 +380,7 @@ def print_event_summary(df: pd.DataFrame) -> None:
             aff = edf[f"pop_affected_{zone}"].sum()
             imp = edf[f"pop_impacted_{zone}"].sum()
             sh = edf[f"hh_shelter_{zone}"].sum()
-            print(
-                f"      {zone.upper():>6s}:  "
-                f"affected={aff:>10,.0f}  "
-                f"impacted={imp:>10,.0f}  "
-                f"shelter={sh:>8,d}"
-            )
+            print(f"      {zone.upper():>6s}:  affected={aff:>10,.0f}  impacted={imp:>10,.0f}  shelter={sh:>8,d}")
 
     print("\n" + "=" * 80)
 
@@ -494,28 +475,25 @@ def export_excel(
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Format L/M/H county estimates for ARC Planning "
-                    "Assumptions Spreadsheet"
+        description="Format L/M/H county estimates for ARC Planning Assumptions Spreadsheet"
     )
     parser.add_argument(
         "--input",
         default="data/county_lmh_features.csv",
-        help="Path to Phase 1 wide-format L/M/H features CSV "
-             "(default: data/county_lmh_features.csv)",
+        help="Path to Phase 1 wide-format L/M/H features CSV (default: data/county_lmh_features.csv)",
     )
     parser.add_argument(
         "--census",
         default="data/census_county_population.csv",
-        help="Path to Census county population CSV "
-             "(default: data/census_county_population.csv)",
+        help="Path to Census county population CSV (default: data/census_county_population.csv)",
     )
     parser.add_argument(
         "--svi",
         default="data/svi_county.csv",
-        help="Path to CDC SVI county CSV "
-             "(default: data/svi_county.csv; fetched from CDC if missing)",
+        help="Path to CDC SVI county CSV (default: data/svi_county.csv; fetched from CDC if missing)",
     )
     parser.add_argument(
         "--svi-bump-weight",
@@ -569,8 +547,7 @@ def main():
     # Report unmatched counties
     unmatched = df["census_pop"].isna().sum()
     if unmatched > 0:
-        log(f"  WARNING: {unmatched} county-event rows have no Census match — "
-            f"setting census_pop=0")
+        log(f"  WARNING: {unmatched} county-event rows have no Census match — setting census_pop=0")
         df["census_pop"] = df["census_pop"].fillna(0)
     else:
         log(f"  All {len(df)} rows matched Census data")
@@ -589,7 +566,6 @@ def main():
         log("Step 3b: Loading CDC SVI data")
         svi_df = load_svi(svi_path)
         df = df.merge(svi_df, on="county_fips5", how="left")
-        df["svi_bump_weight"] = svi_bump_weight
         matched_svi = df["svi_score"].notna().sum()
         df["svi_score"] = df["svi_score"].fillna(0.0)
         log(f"  {matched_svi}/{len(df)} county-events matched SVI data")

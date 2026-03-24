@@ -1,4 +1,3 @@
-
 """Read in NHC raster files for estimated storm surge and identify relevant states."""
 
 import io
@@ -7,7 +6,6 @@ import zipfile
 from typing import Dict, List, Optional
 
 import geopandas as gpd
-import rasterio
 import requests
 from pygris import states
 from rasterio.io import MemoryFile
@@ -76,56 +74,44 @@ def import_surge_data(
     """
     normalized_storm_id = _normalize_storm_id(storm_id, year)
     storm_name = storm_name.upper()
-    adv_int = int(adv)
-    adv_str = str(adv_int)
-    adv_padded = f"{adv_int:03d}"
-    year_str = str(year)
+    adv_padded = f"{int(adv):03d}"
 
     url = f"https://www.nhc.noaa.gov/gis/inundation/forecasts/{normalized_storm_id}_{adv_padded}_tidalmask.zip"
-    tif_filename_in_zip = f"{storm_name}_{year_str}_adv{adv_str}_e10_ResultMaskRaster.tif"
+    tif_filename_in_zip = f"{storm_name}_{year}_adv{int(adv)}_e10_ResultMaskRaster.tif"
     download_session = session or _build_session(retries=retries)
 
-    # Stream the ZIP file content into memory
-    print(f"Downloading ZIP file from {url} into memory...")
+    print(f"Downloading {url} ...")
     response = download_session.get(url, stream=True, timeout=timeout)
-    response.raise_for_status()  # Ensure the download was successful
+    response.raise_for_status()
 
-    # Use BytesIO to handle the bytes data in memory
     zip_in_memory = io.BytesIO(response.content)
 
-    # Open the ZIP file from the in-memory bytes
-    with zipfile.ZipFile(zip_in_memory, 'r') as z:
-        # Check if the desired TIF file exists
+    with zipfile.ZipFile(zip_in_memory, "r") as z:
         if tif_filename_in_zip not in z.namelist():
-            print(f"Error: {tif_filename_in_zip} not found in the archive.")
-            return None
+            raise FileNotFoundError(f"{tif_filename_in_zip} not found in archive (available: {z.namelist()})")
 
-        # Read the specific TIF file data from the ZIP archive
         print(f"Reading {tif_filename_in_zip} from archive...")
         with z.open(tif_filename_in_zip) as tif_file:
             tif_bytes = tif_file.read()
 
     surge_data = MemoryFile(tif_bytes).open()
 
-    # Get surge data bounds for comparison with U.S. state boundaries
     surge_bounds = surge_data.bounds
     surge_polygon = box(surge_bounds.left, surge_bounds.bottom, surge_bounds.right, surge_bounds.top)
-    surge_extent_gdf = gpd.GeoDataFrame({'id': 1, 'geometry': [surge_polygon]}, crs=surge_data.crs)
+    surge_extent_gdf = gpd.GeoDataFrame({"id": 1, "geometry": [surge_polygon]}, crs=surge_data.crs)
 
-    # Compare U.S. state boudaries with surge data to identify relevant states for storm surge
-    us_states = states(cb=True, cache=False, year=year)
+    us_states = states(cb=True, cache=True, year=year)
     us_states = us_states.to_crs(surge_data.crs)
 
     overlapping_states = gpd.sjoin(us_states, surge_extent_gdf, how="inner", predicate="intersects")
 
     state_names: List[str] = []
     if not overlapping_states.empty:
-        state_names = overlapping_states['NAME'].unique().tolist()
+        state_names = overlapping_states["NAME"].unique().tolist()
     else:
         print("States not found")
 
-    return {'data': surge_data, 'states': state_names}
-
+    return {"data": surge_data, "states": state_names}
 
 
 if __name__ == "__main__":
@@ -136,10 +122,7 @@ if __name__ == "__main__":
     year = 2024
 
     ## - get storm surge data and relevant states
-    surge_dict = import_surge_data(storm_id = storm_id, 
-                                   storm_name = storm_name, 
-                                   adv = advisory_no, 
-                                   year = year)
-    surge_data = surge_dict['data']
-    surge_states = surge_dict['states']
+    surge_dict = import_surge_data(storm_id=storm_id, storm_name=storm_name, adv=advisory_no, year=year)
+    surge_data = surge_dict["data"]
+    surge_states = surge_dict["states"]
     print(f"States in the storm surge data for {storm_name}: {surge_states}")
