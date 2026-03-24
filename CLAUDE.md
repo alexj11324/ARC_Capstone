@@ -102,6 +102,25 @@ FAST predictions (Athena)
 
 Scripts live in `research/population_impact/scripts/` (04–06, executed sequentially). Full flowchart: `docs/pipeline_flowchart.md`.
 
+### Pipeline 3: Shelter Demand (Census Tract, Colab)
+
+```
+Excel params (JSON)
+    → Download NHC P-Surge raster + NSI per state
+    → DuckDB spatial filter → FAST engine → predictions
+    → BldgDmgPct → Slight/Moderate/Extensive/Complete (configurable thresholds)
+    → Aggregate to census tract → classify tract severity (L/M/H)
+    → BHI factor (low/high) from usability × utility loss severity
+    → Census tract population + SVI mapping → shelter-seeking (low/high)
+```
+
+Runs entirely in Google Colab via `research/population_impact/notebooks/shelter_demand.ipynb`. Uses BHI (Building Habitability Index) instead of ARC fixed conversion rates. Full diagram: `docs/architecture/shelter_demand_pipeline.md`.
+
+**Core formula** (verified against Excel ground truth):
+```
+shelter_seeking = population × BHI_factor × SVI_Value_Mapped
+```
+
 **Intensity zone classification logic** (surge-primary, damage-fallback):
 - `depth_grid > 12ft` → HIGH | `>= 9ft` → MEDIUM | `>= 4ft` → LOW
 - Fallback: `bldgdmgpct > 35%` → HIGH | `> 15%` → MEDIUM | `> 0%` → LOW
@@ -148,6 +167,7 @@ Scripts live in `research/population_impact/scripts/` (04–06, executed sequent
 | `research/population_impact/scripts/04_classify_lmh.py` | Athena query: dedup + L/M/H zone classification + county agg |
 | `research/population_impact/scripts/05_format_for_spreadsheet.py` | Census join + ARC conversion rates → planning output CSV/XLSX |
 | `research/population_impact/scripts/06_validate_lmh.py` | Validation against ground truth (RMSE, MAE, R²) |
+| `research/population_impact/notebooks/shelter_demand.ipynb` | **Colab E2E**: NHC raster → FAST → BHI → tract-level shelter demand |
 
 ## Environment Setup
 
@@ -278,7 +298,8 @@ No dedup on `bid` across parquet files — duplicate FltyIds inflate damage tota
 |----------|------|
 | Agent execution contract | `AGENTS.md` |
 | Pipeline flowchart (end-to-end) | `docs/pipeline_flowchart.md` |
-| E2E Mermaid diagram | `docs/architecture/e2e_pipeline.md` |
+| E2E Mermaid diagram (L/M/H) | `docs/architecture/e2e_pipeline.md` |
+| Shelter Demand pipeline diagram | `docs/architecture/shelter_demand_pipeline.md` |
 | C4 architecture diagrams | `docs/architecture/c4-*.md` |
 | System manual | `docs/manual/system_manual.md` |
 | Onboarding guide | `docs/wiki/zero_to_hero.md` |
@@ -293,13 +314,9 @@ Current approach uses all 3 advisories per event. **New policy**: use only the *
 - Older advisories may predict surge in areas the storm no longer threatens
 - Improves both timeliness and spatial accuracy of damage estimates
 
-### 2. Census Tract Severity Classification via Building Damage
+### 2. Census Tract Severity Classification via Building Damage — DONE
 
-Replace the current storm-surge-depth-based intensity metric with a **building-damage-based severity classification** at the census tract level. Approach:
-- Aggregate FAST `BldgDmgPct` per census tract (using NSI `cbfips` → tract FIPS)
-- Classify tract severity: e.g. **High** if mean/median `BldgDmgPct` > 35% (threshold is configurable, derived from FAST output)
-- This is more meaningful than raw surge depth because it accounts for building characteristics (foundation type, first floor height, occupancy)
-- Output: census-tract-level severity map (Low / Medium / High) for Red Cross planning
+Implemented in `shelter_demand.ipynb` (Pipeline 3). Uses BldgDmgPct → 4 damage states → tract aggregation → severity classification → BHI factor → shelter-seeking estimation at census tract level.
 
 ## What NOT to Do
 

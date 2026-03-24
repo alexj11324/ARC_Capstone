@@ -205,6 +205,44 @@ Full architecture diagram: [`docs/architecture/e2e_pipeline.md`](docs/architectu
 
 ---
 
+## Pipeline 3: Shelter Demand Model (Census Tract, Colab)
+
+A more granular shelter demand estimation pipeline that runs entirely in Google Colab. Uses the **Building Habitability Index (BHI)** methodology with configurable parameters from an Excel interface.
+
+### Key Differences from Pipeline 2
+
+| | Pipeline 2 (L/M/H) | Pipeline 3 (Shelter Demand) |
+|---|---|---|
+| Granularity | County | Census tract |
+| Damage classification | 3 zones (L/M/H) by surge depth | 4 states (Slight/Moderate/Extensive/Complete) by BldgDmgPct |
+| Shelter conversion | ARC fixed rates (5%/3%/1%) | BHI factor (usability × utility loss × SVI mapping) |
+| Output | Point estimate | Low/high range |
+| Runs on | Local + AWS Athena | Google Colab (no AWS) |
+
+### How to Use
+
+1. Open `ARC Storm Surge Shelter Demand.xlsx`, fill in storm parameters (Step 1)
+2. Copy the JSON params from Step 6
+3. Open [`shelter_demand.ipynb`](research/population_impact/notebooks/shelter_demand.ipynb) in Colab
+4. Paste params into Cell 2, Run All
+5. Copy results back into Excel Step 7
+
+### Core Formula
+
+```
+shelter_seeking = population × BHI_factor × SVI_Value_Mapped
+
+BHI_factor = Σ_d fraction_d × [
+    USABILITY[d][FU] × UL_SEVERITY[risk][FU][bound] +
+    USABILITY[d][PU] × UL_SEVERITY[risk][PU][bound] +
+    USABILITY[d][NU] × 1.0
+]
+```
+
+Full architecture diagram: [`docs/architecture/shelter_demand_pipeline.md`](docs/architecture/shelter_demand_pipeline.md)
+
+---
+
 ## SVI (Social Vulnerability Index) Adjustment
 
 The population impact pipeline applies a **conditional SVI bump** to HIGH intensity zones. Counties with higher social vulnerability (elderly, low-income, minority, housing-insecure populations) generate disproportionately higher demand for Red Cross services when severely impacted.
