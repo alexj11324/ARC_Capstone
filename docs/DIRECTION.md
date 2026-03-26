@@ -232,7 +232,7 @@ Output CSV:
 
 ### 4.3 Colab Notebook (New Version)
 
-**Input**: NHC advisory → SLOSH surge raster → FAST building damage predictions (or pre-computed Athena results)
+**Input**: NHC advisory → NHC P-Surge raster → FAST building damage predictions (or pre-computed Athena results)
 
 **Processing**:
 1. Load building-level damage data (from Athena query or uploaded CSV)
@@ -277,7 +277,7 @@ meals_feeding_low,meals_feeding_med,meals_feeding_high
 
 2. **Refining Michael's Storm Surge Thresholds**: Michael admitted his 4/9/12 ft thresholds were "gut feeling." We can validate these against FAST damage distributions — at what surge depths do we see the damage patterns matching High/Medium/Low criteria in Figure 10?
 
-3. **Pre-event Prediction Pipeline**: The full chain from NHC advisory → SLOSH raster → FAST → county L/M/H populations can run in Colab, giving ARC a tool to generate planning numbers BEFORE landfall.
+3. **Pre-event Prediction Pipeline**: The full chain from NHC advisory → P-Surge raster → FAST → county L/M/H populations can run in Colab, giving ARC a tool to generate planning numbers BEFORE landfall.
 
 4. **Consistency**: Replace subjective "draw zones on a map" with data-driven classification of every building in the affected area.
 

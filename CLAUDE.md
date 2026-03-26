@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CMU Heinz MSPPM 2026 Capstone for American Red Cross. Property-level storm surge/tsunami impact modeling using FEMA's FAST (Flood Assessment Structure Tool) with NSI building inventory (30M+ structures) and SLOSH surge rasters. Goal: estimate building damage, displaced population, and high-need populations for Red Cross shelter/casework planning.
+CMU Heinz MSPPM 2026 Capstone for American Red Cross. Property-level storm surge/tsunami impact modeling using FEMA's FAST (Flood Assessment Structure Tool) with NSI building inventory (30M+ structures) and NHC P-Surge rasters. Goal: estimate building damage, displaced population, and high-need populations for Red Cross shelter/casework planning.
 
 ## Architecture
 

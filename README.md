@@ -2,7 +2,7 @@
 
 CMU Heinz MSPPM 2026 Capstone Project for the American Red Cross.
 
-Property-level storm surge/tsunami impact modeling using FEMA's FAST tool, USACE National Structure Inventory (30M+ buildings), and NOAA SLOSH surge models. Estimates building damage, displaced population, and high-need populations to inform Red Cross shelter and casework planning.
+Property-level storm surge/tsunami impact modeling using FEMA's FAST tool, USACE National Structure Inventory (30M+ buildings), and NOAA storm surge models. Estimates building damage, displaced population, and high-need populations to inform Red Cross shelter and casework planning.
 
 ## Architecture
 
@@ -49,7 +49,6 @@ scripts/
   06_validate_lmh.py            # Validate L/M/H classification results
   nsi_raw_to_parquet.py         # Raw NSI GPKG/GeoJSON -> Parquet
   h3_spatial_index.py           # H3 hex spatial pre-filtering
-  slosh_to_raster.py            # SLOSH Parquet -> GeoTIFF (legacy)
   validate_pipeline.py          # Post-run validation: schema + stats
   ml_damage_model.py            # ML-based damage model (experimental)
   match_county_coverage_cloud.py # County coverage matching
@@ -76,7 +75,6 @@ FAST-main/
 | Source | Description | Format |
 |--------|-------------|--------|
 | NSI | USACE National Structure Inventory 2022 | Parquet, partitioned by state |
-| SLOSH | NOAA MOM surge grids | Parquet, partitioned by basin |
 | SVI | CDC Social Vulnerability Index | Census tract level |
 
 ## Linting
@@ -141,7 +139,7 @@ Results for 9 hurricane events x 3 advisories (27 runs, ~3.9M building predictio
 
 | Column | Description |
 |--------|-------------|
-| `Depth_Grid` | Surge depth from SLOSH raster at building location (ft) |
+| `Depth_Grid` | Surge depth from P-Surge raster at building location (ft) |
 | `Depth_in_Struc` | Effective depth inside structure = Depth_Grid - FirstFloorHt (ft) |
 
 **Damage & Loss**
@@ -171,7 +169,7 @@ Results for 9 hurricane events x 3 advisories (27 runs, ~3.9M building predictio
 |--------|-------------|
 | `event` | Hurricane event slug |
 | `adv` | Advisory number |
-| `raster_name` | Source SLOSH raster filename |
+| `raster_name` | Source raster filename |
 | `run_id` | Pipeline run ID (timestamp-based) |
 | `flc` | Flood class: CoastalA / CoastalV / Riverine |
 
