@@ -17,7 +17,7 @@ NHC P-Surge GeoTIFF (FAST-main/rasters/)                  |
 - Primary pipeline: `scripts/duckdb_fast_pipeline.py`
 - FAST headless engine: `FAST-main/Python_env/run_fast.py`
 - Agent execution rules: @AGENTS.md
-- Pipeline architecture: @docs/shelter_demand_pipeline.md
+- Pipeline architecture: @docs/e2e_pipeline.md
 
 ## Critical Gotchas
 
@@ -65,7 +65,7 @@ Full contract with optional columns and runtime params: @AGENTS.md
 
 ### Flood Depth Raster
 
-Pipeline uses NHC P-Surge GeoTIFF rasters directly (inundation depth in feet). See `docs/shelter_demand_pipeline.md` for the full data flow.
+Pipeline uses NHC P-Surge GeoTIFF rasters directly (inundation depth in feet). See `docs/e2e_pipeline.md` for the full data flow.
 
 ## FAST Runtime Parameters
 

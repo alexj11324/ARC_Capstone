@@ -11,7 +11,7 @@ NSI Parquet --> DuckDB: clean/filter/dedup/map --> FAST CSV -+
 NHC P-Surge GeoTIFF (.tif) --------------------------------+-> FAST engine -> damage predictions
 ```
 
-See `docs/shelter_demand_pipeline.md` for the full Mermaid diagram.
+See `docs/e2e_pipeline.md` for the full Mermaid diagram.
 
 ## Prerequisites
 
@@ -53,13 +53,11 @@ tests/
   test_download_nsi_by_state.py # NSI download tests
   test_import_nhc_by_storm.py   # NHC import tests
 notebooks/
-  shelter_demand.ipynb          # BHI shelter demand estimation (Colab)
-  deploy_population_impact.ipynb # County-level L/M/H impact model (Colab)
+  shelter_demand.ipynb          # BHI shelter demand E2E pipeline (Colab)
 configs/
   event_state_map.yaml          # Hurricane -> affected states + raster patterns
 docs/
   e2e_pipeline.md               # End-to-end pipeline architecture (Mermaid)
-  shelter_demand_pipeline.md    # Shelter demand BHI pipeline (Mermaid)
   reflection.md                 # Project insights and learnings
   nsi_data_dictionary.md        # NSI field definitions (EN/ZH)
 FAST-main/
@@ -88,7 +86,7 @@ Config in `pyproject.toml` (E/F/W/I rules, line-length 100, Python 3.10+).
 |------|---------|
 | `CLAUDE.md` | AI agent instructions, data contracts, critical gotchas |
 | `AGENTS.md` | Execution contract, column mapping rules, guardrails |
-| `docs/shelter_demand_pipeline.md` | Pipeline architecture with BHI shelter demand model (Mermaid) |
+| `docs/e2e_pipeline.md` | End-to-end pipeline architecture with BHI model (Mermaid) |
 | `docs/nsi_data_dictionary.md` | NSI field definitions (English + Chinese) |
 
 ## Output

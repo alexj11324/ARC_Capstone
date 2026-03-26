@@ -8,7 +8,7 @@ To achieve rapid iteration and avoid classic GIS latency traps of large SQL JOIN
 - **DuckDB**: Replaces traditional database environments to load partitioned `.parquet` payloads directly from disk.
 - **Decoupled Engine**: The FEMA FAST utility operates as a black-box local shell execution, receiving structural damage states natively formatted via our pipeline.
 
-*For architectural diagrams, refer to [e2e_pipeline.md](../e2e_pipeline.md) and [shelter_demand_pipeline.md](../shelter_demand_pipeline.md).*
+*For the pipeline architecture diagram, refer to [e2e_pipeline.md](../e2e_pipeline.md).*
 
 ## 3. High-Level Data Flow
 1. **Raster Acquisition**: NHC P-Surge GeoTIFF rasters are downloaded via `scripts/import_nhc_by_storm.py`.
