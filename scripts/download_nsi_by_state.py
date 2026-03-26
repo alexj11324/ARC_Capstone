@@ -178,6 +178,8 @@ def cleanup_temp_path(temp_path: Path) -> None:
 
 
 def open_url_with_retries(url: str, timeout: float, retries: int):
+    if retries < 0:
+        raise ValueError(f"retries must be >= 0, got {retries}")
     last_error: Exception | None = None
     for attempt in range(1, retries + 2):
         try:
