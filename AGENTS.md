@@ -123,3 +123,12 @@ When asking, provide exactly what is missing and a recommended default.
 3. NHC P-Surge rasters are downloaded directly from NHC and stored in `FAST-main/rasters/`.
 4. Pipeline execution uses `scripts/duckdb_fast_pipeline.py` (DuckDB SQL) for all data transformation.
 5. Shelter demand analysis runs in Google Colab via `notebooks/shelter_demand.ipynb`.
+
+## Learned User Preferences
+
+- Prefer cell-level notebook editing (for example `EditNotebook`) over rewriting `.ipynb` via shell; if the user forbids bash for a notebook change, do not use shell to edit the notebook.
+- For `notebooks/shelter_demand.ipynb`, user expects progress and rate display (for example `tqdm` with speed or postfix) on download and streaming-fetch code paths.
+
+## Learned Workspace Facts
+
+- Team-processed NSI/SLOSH may live in S3 as partitioned Parquet; the Athena/Glue catalog can expose more than one SLOSH table with different schemas—confirm the authoritative table and prefix before building joins (see `docs/` and slide materials for bucket paths).

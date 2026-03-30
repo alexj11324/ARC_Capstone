@@ -2,6 +2,7 @@
 
 import io
 import re
+import time
 import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -13,6 +14,28 @@ from rasterio.io import MemoryFile
 from requests.adapters import HTTPAdapter
 from shapely.geometry import box
 from urllib3.util.retry import Retry
+
+try:
+    from tqdm.auto import tqdm
+except Exception:  # pragma: no cover
+    # Fallback that keeps this module runnable even if tqdm isn't installed.
+    # Only supports the context-manager + update calls we use below.
+    def tqdm(*_args, **_kwargs):  # type: ignore
+        class _Dummy:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def update(self, n: int = 0) -> None:
+                pass
+
+            def set_postfix(self, **_kw) -> None:
+                pass
+
+        return _Dummy()
+
 
 try:
     from pygris import states as states
@@ -90,20 +113,14 @@ def _resolve_nhc_archive_urls(
     response.raise_for_status()
 
     hrefs = re.findall(r'href="([^"]+_tidalmask\.zip)"', response.text, flags=re.IGNORECASE)
-    available_urls = {
-        Path(href).name: urljoin(NHC_INUNDATION_INDEX_URL, href)
-        for href in hrefs
-    }
+    available_urls = {Path(href).name: urljoin(NHC_INUNDATION_INDEX_URL, href) for href in hrefs}
 
     exact_names = [
         f"{storm_id}_{adv_value}_tidalmask.zip"
         for storm_id in _storm_id_variants(normalized_storm_id, year)
         for adv_value in _advisory_variants(adv)
     ]
-    latest_names = [
-        f"{storm_id}_tidalmask_latest.zip"
-        for storm_id in _storm_id_variants(normalized_storm_id, year)
-    ]
+    latest_names = [f"{storm_id}_tidalmask_latest.zip" for storm_id in _storm_id_variants(normalized_storm_id, year)]
 
     resolved = [available_urls[name] for name in exact_names if name in available_urls]
     if resolved:
@@ -120,10 +137,7 @@ def _build_nhc_candidate_urls(normalized_storm_id: str, adv: int, year: int) -> 
         for storm_id in _storm_id_variants(normalized_storm_id, year)
         for adv_value in _advisory_variants(adv)
     ]
-    latest_names = [
-        f"{storm_id}_tidalmask_latest.zip"
-        for storm_id in _storm_id_variants(normalized_storm_id, year)
-    ]
+    latest_names = [f"{storm_id}_tidalmask_latest.zip" for storm_id in _storm_id_variants(normalized_storm_id, year)]
     return [urljoin(NHC_FORECASTS_BASE_URL, name) for name in list(dict.fromkeys(exact_names + latest_names))]
 
 
@@ -190,13 +204,29 @@ def import_surge_data(
     if response is None:
         raise last_error or RuntimeError("Unable to download NHC tidalmask archive.")
 
-    zip_in_memory = io.BytesIO(response.content)
+    total_bytes = int(response.headers.get("Content-Length", 0) or 0)
+    zip_in_memory = io.BytesIO()
+    chunk_size = 1024 * 1024  # 1MB
+    with tqdm(
+        total=total_bytes if total_bytes > 0 else None,
+        desc="Downloading NHC archive",
+        unit="B",
+        unit_scale=True,
+    ) as pbar:
+        start = time.time()
+        for chunk in response.iter_content(chunk_size=chunk_size):
+            if not chunk:
+                continue
+            zip_in_memory.write(chunk)
+            pbar.update(len(chunk))
+            elapsed = max(time.time() - start, 1e-9)
+            mb_s = zip_in_memory.tell() / elapsed / 1024 / 1024
+            pbar.set_postfix_str(f"{mb_s:.2f} MB/s")
+    response.close()
 
     with zipfile.ZipFile(zip_in_memory, "r") as z:
         if tif_filename_in_zip not in z.namelist():
-            raise FileNotFoundError(
-                f"{tif_filename_in_zip} not found in archive (available: {z.namelist()})"
-            )
+            raise FileNotFoundError(f"{tif_filename_in_zip} not found in archive (available: {z.namelist()})")
 
         print(f"Reading {tif_filename_in_zip} from archive...")
         with z.open(tif_filename_in_zip) as tif_file:
@@ -205,9 +235,7 @@ def import_surge_data(
     surge_data = MemoryFile(tif_bytes).open()
 
     surge_bounds = surge_data.bounds
-    surge_polygon = box(
-        surge_bounds.left, surge_bounds.bottom, surge_bounds.right, surge_bounds.top
-    )
+    surge_polygon = box(surge_bounds.left, surge_bounds.bottom, surge_bounds.right, surge_bounds.top)
     surge_extent_gdf = gpd.GeoDataFrame({"id": 1, "geometry": [surge_polygon]}, crs=surge_data.crs)
 
     us_states = _get_states(cb=True, cache=True, year=year)
@@ -267,9 +295,7 @@ if __name__ == "__main__":
     year = 2024
 
     ## - get storm surge data and relevant states
-    surge_dict = import_surge_data(
-        storm_id=storm_id, storm_name=storm_name, adv=advisory_no, year=year
-    )
+    surge_dict = import_surge_data(storm_id=storm_id, storm_name=storm_name, adv=advisory_no, year=year)
     surge_data = surge_dict["data"]
     surge_states = surge_dict["states"]
     print(f"States in the storm surge data for {storm_name}: {surge_states}")

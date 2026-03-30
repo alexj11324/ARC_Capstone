@@ -1,5 +1,6 @@
 # Large generated artifacts
 exports/
+repo/outputs/
 
 # Python caches
 __pycache__/

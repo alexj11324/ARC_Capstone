@@ -1,16 +1,23 @@
 import io
 import json
+import sys
 import tempfile
 import unittest
 import warnings
 from http.client import IncompleteRead
 from pathlib import Path
 from unittest import mock
-from urllib import request as urllib_request
 
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import box
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+import scripts.nsi_downloader as nsi_mod  # noqa: E402
+from scripts.nsi_downloader import NSIDownloader  # noqa: E402
 
 
 def _feature_line(bid, longitude=1.0, latitude=2.0):
@@ -34,35 +41,9 @@ def _feature_line(bid, longitude=1.0, latitude=2.0):
     return json.dumps(feature) + "\n"
 
 
-def _load_nsi_helpers():
-    repo_root = Path(__file__).resolve().parents[2]
-    notebook_path = repo_root / "notebooks" / "shelter_demand.ipynb"
-    notebook = json.loads(notebook_path.read_text())
-    cell = next(
-        cell
-        for cell in notebook["cells"]
-        if cell.get("cell_type") == "code"
-        and any("# Cell 4: Download NSI Data" in line for line in cell.get("source", []))
-    )
-
-    source = "".join(cell["source"])
-    source = source.split("# Build raster bbox polygon for failed-county checks\n", 1)[0]
-
-    namespace = {
-        "__builtins__": __builtins__,
-        "json": json,
-        "pd": pd,
-        "warnings": warnings,
-        "urllib_request": urllib_request,
-        "time": __import__("time"),
-    }
-    exec(source, namespace)
-    return namespace
-
-
 class ShelterNsiDownloadTest(unittest.TestCase):
     def test_stream_retries_when_urlopen_raises_incomplete_read(self):
-        namespace = _load_nsi_helpers()
+        downloader = NSIDownloader(Path("."))
         attempts = []
         responses = [
             io.BytesIO((_feature_line("retry-a") + _feature_line("retry-b")).encode("utf-8")),
@@ -74,22 +55,21 @@ class ShelterNsiDownloadTest(unittest.TestCase):
                 raise IncompleteRead(b"", 1024)
             return responses[0]
 
-        with mock.patch.object(namespace["urllib_request"], "urlopen", side_effect=fake_urlopen):
-            with mock.patch.object(namespace["time"], "sleep"):
-                rows = namespace["_stream_nsi_features"]("https://example.test/nsi", timeout=1, retries=2)
+        with mock.patch.object(nsi_mod.urllib_request, "urlopen", side_effect=fake_urlopen):
+            with mock.patch.object(nsi_mod.time, "sleep"):
+                rows, _nbytes = downloader.stream_features("https://example.test/nsi", timeout=1, retries=2)
 
         self.assertEqual(len(attempts), 2)
         self.assertEqual([row["bid"] for row in rows], ["retry-a", "retry-b"])
 
     def test_stream_retries_when_a_feature_line_is_malformed(self):
-        namespace = _load_nsi_helpers()
+        downloader = NSIDownloader(Path("."))
         attempts = []
         responses = [
             io.BytesIO(
-                (
-                    _feature_line("first-attempt")
-                    + '{"type": "Feature", "properties": {"bid": "broken"}\n'
-                ).encode("utf-8")
+                (_feature_line("first-attempt") + '{"type": "Feature", "properties": {"bid": "broken"}\n').encode(
+                    "utf-8"
+                )
             ),
             io.BytesIO((_feature_line("retry-a") + _feature_line("retry-b")).encode("utf-8")),
         ]
@@ -98,18 +78,16 @@ class ShelterNsiDownloadTest(unittest.TestCase):
             attempts.append(timeout)
             return responses[len(attempts) - 1]
 
-        with mock.patch.object(namespace["urllib_request"], "urlopen", side_effect=fake_urlopen):
-            with mock.patch.object(namespace["time"], "sleep"):
-                rows = namespace["_stream_nsi_features"]("https://example.test/nsi", timeout=1, retries=2)
+        with mock.patch.object(nsi_mod.urllib_request, "urlopen", side_effect=fake_urlopen):
+            with mock.patch.object(nsi_mod.time, "sleep"):
+                rows, _nbytes = downloader.stream_features("https://example.test/nsi", timeout=1, retries=2)
 
         self.assertEqual(len(attempts), 2)
         self.assertEqual([row["bid"] for row in rows], ["retry-a", "retry-b"])
 
     def test_partial_large_state_downloads_are_not_cached(self):
-        namespace = _load_nsi_helpers()
-
         with tempfile.TemporaryDirectory(prefix="nsi_cache_test_") as temp_dir:
-            namespace["WORK_DIR"] = Path(temp_dir)
+            downloader = NSIDownloader(Path(temp_dir))
 
             failed_county = "06003"
             counties_gdf = gpd.GeoDataFrame(
@@ -123,29 +101,31 @@ class ShelterNsiDownloadTest(unittest.TestCase):
 
             def fake_stream(url):
                 if "06001" in url:
-                    return [
-                        {
-                            "bid": "row-1",
-                            "occtype": "RES1",
-                            "longitude": 1.0,
-                            "latitude": 2.0,
-                        }
-                    ]
+                    return (
+                        [
+                            {
+                                "bid": "row-1",
+                                "occtype": "RES1",
+                                "longitude": 1.0,
+                                "latitude": 2.0,
+                            }
+                        ],
+                        10,
+                    )
                 raise OSError("transient download failure")
 
-            namespace["_get_county_fips"] = fake_get_county_fips
-            namespace["_stream_nsi_features"] = fake_stream
+            with mock.patch.object(downloader, "county_fips", side_effect=fake_get_county_fips):
+                with mock.patch.object(downloader, "stream_features", side_effect=fake_stream):
+                    with warnings.catch_warnings(record=True) as caught:
+                        warnings.simplefilter("always")
+                        df, _nbytes = downloader.download_state(
+                            "California",
+                            raster_bbox_polygon=box(0, 0, 2, 2),
+                        )
 
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                data = namespace["download_nsi_state"](
-                    "California",
-                    raster_bbox_polygon=box(0, 0, 2, 2),
-                )
+            cache_path = downloader.work_dir / "nsi_california.parquet"
 
-            cache_path = namespace["WORK_DIR"] / "nsi_california.parquet"
-
-            self.assertEqual(len(data), 1)
+            self.assertEqual(len(df), 1)
             self.assertFalse(cache_path.exists())
             self.assertTrue(any("counties failed but none intersect raster" in str(item.message) for item in caught))
 
