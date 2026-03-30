@@ -43,6 +43,11 @@ class _DummyResponse:
         return None
 
 
+class _DummyErrorResponse(_DummyResponse):
+    def raise_for_status(self) -> None:
+        raise nhc.requests.HTTPError("404 Client Error")
+
+
 @patch("scripts.import_nhc_by_storm.gpd.sjoin")
 @patch("scripts.import_nhc_by_storm.states")
 def test_importer_returns_states_and_readable_raster(mock_states, mock_sjoin):
@@ -94,3 +99,31 @@ def test_normalizes_storm_id_with_two_digit_year():
     assert nhc._normalize_storm_id("AL0224", 2024) == "AL022024"
     assert nhc._normalize_storm_id("al02", 2024) == "AL022024"
     assert nhc._normalize_storm_id("AL022024", 2024) == "AL022024"
+
+
+@patch("scripts.import_nhc_by_storm.gpd.sjoin")
+@patch("scripts.import_nhc_by_storm.states")
+def test_importer_falls_back_to_legacy_and_latest_urls(mock_states, mock_sjoin):
+    zip_bytes = _make_zip_bytes("BERYL", 2024, 29)
+    mock_session = MagicMock()
+    mock_session.get.side_effect = [
+        _DummyErrorResponse(b""),
+        _DummyResponse(zip_bytes),
+    ]
+
+    state_geom = box(-1, -1, 1, 1)
+    states_gdf = gpd.GeoDataFrame(
+        {"NAME": ["TestState"], "geometry": [state_geom]}, crs="EPSG:4326"
+    )
+    mock_states.return_value = states_gdf
+    mock_sjoin.return_value = states_gdf
+
+    result = nhc.import_surge_data("AL022024", "BERYL", 29, 2024, session=mock_session, timeout=5)
+
+    called_urls = [call.kwargs["url"] if "url" in call.kwargs else call.args[0] for call in mock_session.get.call_args_list]
+    assert called_urls == [
+        "https://www.nhc.noaa.gov/gis/inundation/forecasts/AL022024_029_tidalmask.zip",
+        "https://www.nhc.noaa.gov/gis/inundation/forecasts/AL0224_29_tidalmask.zip",
+    ]
+    assert result["states"] == ["TestState"]
+    result["data"].close()

@@ -47,6 +47,18 @@ def _build_session(retries: int = 3, backoff: float = 0.5) -> requests.Session:
     return session
 
 
+def _build_nhc_candidate_urls(normalized_storm_id: str, adv: int, year: int) -> List[str]:
+    """Return likely NHC tidalmask archive URLs in newest-to-oldest naming order."""
+    adv_padded = f"{int(adv):03d}"
+    legacy_storm_id = f"{normalized_storm_id[:4]}{str(year)[-2:]}"
+    return [
+        f"https://www.nhc.noaa.gov/gis/inundation/forecasts/{normalized_storm_id}_{adv_padded}_tidalmask.zip",
+        f"https://www.nhc.noaa.gov/gis/inundation/forecasts/{legacy_storm_id}_{int(adv)}_tidalmask.zip",
+        f"https://www.nhc.noaa.gov/gis/inundation/forecasts/{normalized_storm_id}_tidalmask_latest.zip",
+        f"https://www.nhc.noaa.gov/gis/inundation/forecasts/{legacy_storm_id}_tidalmask_latest.zip",
+    ]
+
+
 def import_surge_data(
     storm_id: str,
     storm_name: str,
@@ -74,15 +86,25 @@ def import_surge_data(
     """
     normalized_storm_id = _normalize_storm_id(storm_id, year)
     storm_name = storm_name.upper()
-    adv_padded = f"{int(adv):03d}"
-
-    url = f"https://www.nhc.noaa.gov/gis/inundation/forecasts/{normalized_storm_id}_{adv_padded}_tidalmask.zip"
+    candidate_urls = _build_nhc_candidate_urls(normalized_storm_id, adv, year)
     tif_filename_in_zip = f"{storm_name}_{year}_adv{int(adv)}_e10_ResultMaskRaster.tif"
     download_session = session or _build_session(retries=retries)
 
-    print(f"Downloading {url} ...")
-    response = download_session.get(url, stream=True, timeout=timeout)
-    response.raise_for_status()
+    response = None
+    last_error = None
+    for url in candidate_urls:
+        print(f"Downloading {url} ...")
+        candidate_response = download_session.get(url, stream=True, timeout=timeout)
+        try:
+            candidate_response.raise_for_status()
+        except requests.HTTPError as exc:
+            last_error = exc
+            continue
+        response = candidate_response
+        break
+
+    if response is None:
+        raise last_error or RuntimeError("Unable to download NHC tidalmask archive.")
 
     zip_in_memory = io.BytesIO(response.content)
 
