@@ -31,3 +31,9 @@ venv/
 
 # Local assistant configs
 .claude/
+.cursor/debug-31e34b.log
+.cursor/hooks/state/continual-learning.json
+.cursor/hooks/state/continual-learning.json
+.cursor/hooks/state/continual-learning.json
+.cursor/hooks/state/continual-learning.json
+.gitignore
