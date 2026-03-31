@@ -212,10 +212,15 @@ def main(argv: list[str] | None = None) -> int:
         choices=["duckdb", "geopandas"],
         help="Conversion engine for GeoJSON -> Parquet (default: duckdb)",
     )
+    parser.add_argument(
+        "--upload-only",
+        action="store_true",
+        help="Skip download and upload an existing Parquet directory only",
+    )
 
     args = parser.parse_args(argv)
 
-    if args.download_all:
+    if args.download_all and not args.upload_only:
         download_all_states(args.output_dir, engine=args.engine)
 
     # Step 2: Upload

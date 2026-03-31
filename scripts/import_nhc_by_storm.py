@@ -221,7 +221,11 @@ def import_surge_data(
             pbar.update(len(chunk))
             elapsed = max(time.time() - start, 1e-9)
             mb_s = zip_in_memory.tell() / elapsed / 1024 / 1024
-            pbar.set_postfix_str(f"{mb_s:.2f} MB/s")
+            # tqdm returns a lightweight _Dummy when disabled; guard against missing helpers.
+            if hasattr(pbar, "set_postfix_str"):
+                pbar.set_postfix_str(f"{mb_s:.2f} MB/s")
+            else:  # pragma: no cover - exercised in unit tests with _Dummy progress bar
+                pbar.set_postfix({"rate": f"{mb_s:.2f} MB/s"})
     response.close()
 
     with zipfile.ZipFile(zip_in_memory, "r") as z:
