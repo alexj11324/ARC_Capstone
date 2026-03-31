@@ -322,8 +322,6 @@ class NSIDownloader:
             if parts[0].startswith("state="):
                 key = parts[0].split("=", 1)[1].lower()
                 available.setdefault(key, []).append(pf)
-            else:
-                available.setdefault("_flat", []).append(pf)
 
         # Match requested states to partitions
         files_to_download: list[str] = []
