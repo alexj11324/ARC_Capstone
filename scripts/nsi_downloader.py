@@ -270,7 +270,19 @@ class NSIDownloader:
 
         return pd.concat(nsi_dfs, ignore_index=True)
 
-    REQUIRED_HF_COLS = frozenset({"cbfips", "bid", "longitude", "latitude"})
+    REQUIRED_HF_COLS = frozenset(
+        {"cbfips", "bid", "longitude", "latitude"}
+    )
+
+    @staticmethod
+    def _hf_partition_key(state_name: str) -> str:
+        """Convert state name to HF partition directory key.
+
+        HF dataset uses ``state=Florida/``, ``state=New_York/``,
+        ``state=District_Of_Columbia/`` (spaces → ``_``, title-case
+        with each word capitalised).
+        """
+        return state_name.strip().replace(" ", "_").title()
 
     def download_states_hf(
         self,
@@ -278,32 +290,18 @@ class NSIDownloader:
         repo_id: str = "Alexq847182/NSI_Parquet",
         token: str | None = None,
     ) -> pd.DataFrame:
-        """Download NSI from a HuggingFace dataset repo, filtering per-file.
+        """Download NSI from a HuggingFace dataset repo.
 
-        Each parquet file is filtered to the requested states immediately
-        after reading, keeping peak memory low.
+        The HF dataset is partitioned by state
+        (``state=Florida/part-00000.snappy.parquet``).  Only files
+        for the requested ``state_names`` are downloaded — no full
+        dataset download is needed.
         """
         from huggingface_hub import HfApi, hf_hub_download
 
         keep_cols = self.KEEP_COLS + ["longitude", "latitude"]
 
-        # Case-insensitive lookup handles pygris variations
-        # (e.g. "District of Columbia" vs "District Of Columbia")
-        fips_by_lower = {
-            k.lower(): v for k, v in self.STATE_FIPS.items()
-        }
-        affected_fips: set[str] = set()
-        for s in state_names:
-            fips = fips_by_lower.get(s.lower())
-            if fips:
-                affected_fips.add(fips)
-            else:
-                warnings.warn(f"No FIPS for {s!r}, skipping")
-        if not affected_fips:
-            raise ValueError(
-                f"No valid state FIPS found for: {state_names}"
-            )
-
+        # Build mapping: HF partition key → state name
         api = HfApi()
         repo_files = api.list_repo_files(
             repo_id, repo_type="dataset", token=token
@@ -315,9 +313,42 @@ class NSIDownloader:
             raise FileNotFoundError(
                 f"No parquet files in HF dataset {repo_id}"
             )
+
+        # Index available partitions (lower-case key → filename)
+        available: dict[str, list[str]] = {}
+        for pf in parquet_files:
+            # e.g. "state=Florida/part-00000.snappy.parquet"
+            parts = pf.split("/")
+            if parts[0].startswith("state="):
+                key = parts[0].split("=", 1)[1].lower()
+                available.setdefault(key, []).append(pf)
+            else:
+                available.setdefault("_flat", []).append(pf)
+
+        # Match requested states to partitions
+        files_to_download: list[str] = []
+        matched_states: list[str] = []
+        for s in state_names:
+            key = self._hf_partition_key(s).lower()
+            if key in available:
+                files_to_download.extend(available[key])
+                matched_states.append(s)
+            else:
+                warnings.warn(
+                    f"No HF partition for {s!r} "
+                    f"(tried key={key!r}), skipping"
+                )
+
+        if not files_to_download:
+            raise FileNotFoundError(
+                f"No HF partitions matched for states "
+                f"{state_names}. Available partitions: "
+                f"{sorted(available.keys())}"
+            )
+
         print(
-            f"Found {len(parquet_files)} parquet file(s) "
-            f"in {repo_id}"
+            f"Downloading {len(files_to_download)} file(s) for "
+            f"{len(matched_states)} state(s): {matched_states}"
         )
 
         hf_cache_dir = self.work_dir / "hf_nsi_cache"
@@ -328,11 +359,11 @@ class NSIDownloader:
         total_bytes = 0
 
         with tqdm(
-            total=len(parquet_files),
+            total=len(files_to_download),
             desc="Downloading NSI from HuggingFace",
             unit="file",
         ) as pbar:
-            for pf in parquet_files:
+            for pf in files_to_download:
                 local_path = hf_hub_download(
                     repo_id=repo_id,
                     filename=pf,
@@ -361,18 +392,6 @@ class NSIDownloader:
                 ]
                 df_part = df_part[available_cols]
 
-                # Zero-pad cbfips to 15 digits before slicing
-                # state FIPS — handles numeric parquet columns
-                # that lose leading zeros.
-                df_part = df_part[df_part["cbfips"].notna()]
-                state_col = (
-                    df_part["cbfips"]
-                    .astype(str)
-                    .str.zfill(15)
-                    .str[:2]
-                )
-                df_part = df_part[state_col.isin(affected_fips)]
-
                 if not df_part.empty:
                     nsi_dfs.append(df_part)
 
@@ -388,8 +407,5 @@ class NSIDownloader:
             )
 
         result = pd.concat(nsi_dfs, ignore_index=True)
-        print(
-            f"Filtered to {len(affected_fips)} state(s): "
-            f"{affected_fips} — {len(result):,} buildings"
-        )
+        print(f"Total: {len(result):,} buildings")
         return result
