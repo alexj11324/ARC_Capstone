@@ -38,9 +38,9 @@ except Exception:  # pragma: no cover
 
 
 try:
-    from pygris import states as states
-except Exception:
-    states = None
+    from pygris import states as _pygris_states
+except Exception:  # pragma: no cover
+    _pygris_states = None
 
 NHC_INUNDATION_INDEX_URL = "https://www.nhc.noaa.gov/gis/archive_inundation_results.php"
 NHC_FORECASTS_BASE_URL = "https://www.nhc.noaa.gov/gis/inundation/forecasts/"
@@ -94,8 +94,8 @@ def _build_tif_filename(storm_name: str, year: int, adv: int) -> str:
 
 
 def _get_states(cb: bool, cache: bool, year: int):
-    get_states = states
-    if get_states is None:
+    get_states = _pygris_states
+    if get_states is None:  # pragma: no cover
         from pygris import states as get_states
     return get_states(cb=cb, cache=cache, year=year)
 
@@ -181,8 +181,8 @@ def import_surge_data(
                 timeout=timeout,
             )
         )
-    except requests.RequestException:
-        pass
+    except requests.RequestException as exc:
+        print(f"WARNING: archive discovery failed ({exc}), falling back to direct URLs")
     candidate_urls.extend(_build_nhc_candidate_urls(normalized_storm_id, adv, year))
     candidate_urls = list(dict.fromkeys(candidate_urls))
 
@@ -221,7 +221,11 @@ def import_surge_data(
             pbar.update(len(chunk))
             elapsed = max(time.time() - start, 1e-9)
             mb_s = zip_in_memory.tell() / elapsed / 1024 / 1024
-            pbar.set_postfix_str(f"{mb_s:.2f} MB/s")
+            # tqdm returns a lightweight _Dummy when disabled; guard against missing helpers.
+            if hasattr(pbar, "set_postfix_str"):
+                pbar.set_postfix_str(f"{mb_s:.2f} MB/s")
+            else:  # pragma: no cover - exercised in unit tests with _Dummy progress bar
+                pbar.set_postfix({"rate": f"{mb_s:.2f} MB/s"})
     response.close()
 
     with zipfile.ZipFile(zip_in_memory, "r") as z:
