@@ -1,7 +1,5 @@
 # Immediate Tsunami and Storm Surge Population Impact Modeling
 
-CMU Heinz MSPPM 2026 Capstone Project for the American Red Cross.
-
 Property-level storm surge/tsunami impact modeling using FEMA's FAST tool, USACE National Structure Inventory (30M+ buildings), and NOAA storm surge models. Estimates building damage, displaced population, and high-need populations to inform Red Cross shelter and casework planning.
 
 ## Architecture
