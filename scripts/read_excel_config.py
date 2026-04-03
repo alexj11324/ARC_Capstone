@@ -127,12 +127,12 @@ def load_config_from_excel(xlsx_path):
         tract_severity = {}
         
         h_d = parse_range_pct(df.iloc[12, 2])
-        h_m = parse_range_pct(df.iloc[12, 3])
+        h_m = parse_range_pct(df.iloc[12, 4])
         if h_d is not None and h_m is not None:
             tract_severity['high'] = {'pct_destroyed': h_d, 'pct_major_damage': h_m}
             
         m_d = parse_range_pct(df.iloc[13, 2])
-        m_m = parse_range_pct(df.iloc[13, 3])
+        m_m = parse_range_pct(df.iloc[13, 4])
         if m_d is not None and m_m is not None:
             tract_severity['medium'] = {'pct_destroyed': m_d, 'pct_major_damage': m_m}
             
