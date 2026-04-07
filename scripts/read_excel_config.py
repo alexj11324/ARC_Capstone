@@ -28,6 +28,10 @@ def get_default_params():
             'high':   {'pct_destroyed': 0.35, 'pct_major_damage': 0.35},
             'medium': {'pct_destroyed': 0.11, 'pct_major_damage': 0.16},
         },
+        'DAMAGE_SEVERITY': {
+            'high':   {'pct_destroyed': 0.35, 'pct_major_damage': 0.35},
+            'medium': {'pct_destroyed': 0.11, 'pct_major_damage': 0.16},
+        },
 
         # ── Building Habitability Index (BHI) ─────────────────────
         'BLDNG_USABILITY': {
@@ -47,6 +51,12 @@ def get_default_params():
         # ── SVI configuration ──────────────────────────────────────
         'SVI_SHELTER_RATES': [0.000, 0.025, 0.050],
         'SVI_BINS': [0.4, 0.8],          # bin edges for low/med/high SVI
+        'PERCENT_IMPACT': {
+            'high': 5.0,
+            'medium': 2.5,
+            'low': 0.0,
+        },
+        'geography': 'census tract',
 
         # ── Network / performance ──────────────────────────────────
         'download_timeout': 60,           # raster + census API timeout (s)
@@ -138,6 +148,7 @@ def load_config_from_excel(xlsx_path):
             
         if tract_severity:
             extracted['TRACT_SEVERITY'] = tract_severity
+            extracted['DAMAGE_SEVERITY'] = tract_severity.copy()
     except IndexError:
         pass # Handle case where user truncates the file further
 
